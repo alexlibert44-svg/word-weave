@@ -14,6 +14,7 @@ import { Route as AddRouteImport } from './routes/add'
 import { Route as PracticeRouteImport } from './routes/practice'
 import { Route as SetsIndexRouteImport } from './routes/sets.index'
 import { Route as SetsSetIdRouteImport } from './routes/sets.$setId'
+import { Route as SetsSetIdWordsWordIdRouteImport } from './routes/sets.$setId.words.$wordId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -40,42 +41,69 @@ const SetsSetIdRoute = SetsSetIdRouteImport.update({
   path: '/sets/$setId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SetsSetIdWordsWordIdRoute = SetsSetIdWordsWordIdRouteImport.update({
+  id: '/words/$wordId',
+  path: '/words/$wordId',
+  getParentRoute: () => SetsSetIdRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/add': typeof AddRoute
   '/practice': typeof PracticeRoute
-  '/sets/$setId': typeof SetsSetIdRoute
+  '/sets/$setId': typeof SetsSetIdRouteWithChildren
   '/sets/': typeof SetsIndexRoute
+  '/sets/$setId/words/$wordId': typeof SetsSetIdWordsWordIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/add': typeof AddRoute
   '/practice': typeof PracticeRoute
-  '/sets/$setId': typeof SetsSetIdRoute
+  '/sets/$setId': typeof SetsSetIdRouteWithChildren
   '/sets': typeof SetsIndexRoute
+  '/sets/$setId/words/$wordId': typeof SetsSetIdWordsWordIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/add': typeof AddRoute
   '/practice': typeof PracticeRoute
-  '/sets/$setId': typeof SetsSetIdRoute
+  '/sets/$setId': typeof SetsSetIdRouteWithChildren
   '/sets/': typeof SetsIndexRoute
+  '/sets/$setId/words/$wordId': typeof SetsSetIdWordsWordIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/add' | '/practice' | '/sets/$setId' | '/sets/'
+  fullPaths:
+    | '/'
+    | '/add'
+    | '/practice'
+    | '/sets/$setId'
+    | '/sets/'
+    | '/sets/$setId/words/$wordId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/add' | '/practice' | '/sets/$setId' | '/sets'
-  id: '__root__' | '/' | '/add' | '/practice' | '/sets/$setId' | '/sets/'
+  to:
+    | '/'
+    | '/add'
+    | '/practice'
+    | '/sets/$setId'
+    | '/sets'
+    | '/sets/$setId/words/$wordId'
+  id:
+    | '__root__'
+    | '/'
+    | '/add'
+    | '/practice'
+    | '/sets/$setId'
+    | '/sets/'
+    | '/sets/$setId/words/$wordId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AddRoute: typeof AddRoute
   PracticeRoute: typeof PracticeRoute
-  SetsSetIdRoute: typeof SetsSetIdRoute
+  SetsSetIdRoute: typeof SetsSetIdRouteWithChildren
   SetsIndexRoute: typeof SetsIndexRoute
 }
 
@@ -116,14 +144,33 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SetsSetIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/sets/$setId/words/$wordId': {
+      id: '/sets/$setId/words/$wordId'
+      path: '/words/$wordId'
+      fullPath: '/sets/$setId/words/$wordId'
+      preLoaderRoute: typeof SetsSetIdWordsWordIdRouteImport
+      parentRoute: typeof SetsSetIdRoute
+    }
   }
 }
+
+interface SetsSetIdRouteChildren {
+  SetsSetIdWordsWordIdRoute: typeof SetsSetIdWordsWordIdRoute
+}
+
+const SetsSetIdRouteChildren: SetsSetIdRouteChildren = {
+  SetsSetIdWordsWordIdRoute: SetsSetIdWordsWordIdRoute,
+}
+
+const SetsSetIdRouteWithChildren = SetsSetIdRoute._addFileChildren(
+  SetsSetIdRouteChildren,
+)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AddRoute: AddRoute,
   PracticeRoute: PracticeRoute,
-  SetsSetIdRoute: SetsSetIdRoute,
+  SetsSetIdRoute: SetsSetIdRouteWithChildren,
   SetsIndexRoute: SetsIndexRoute,
 }
 export const routeTree = rootRouteImport
