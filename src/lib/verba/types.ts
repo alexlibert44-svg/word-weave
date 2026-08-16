@@ -1,0 +1,106 @@
+export type Skill =
+  | "recognition"
+  | "listening"
+  | "reading"
+  | "writing"
+  | "speaking"
+  | "recall"
+  | "sentence_usage"
+  | "form";
+
+export type MasteryState = "new" | "learning" | "familiar" | "strong" | "mastered";
+
+export interface WordSet {
+  id: string;
+  device_id: string;
+  name: string;
+  is_demo: boolean;
+  last_practiced_at: string | null;
+  created_at: string;
+}
+
+export interface Word {
+  id: string;
+  set_id: string;
+  text: string;
+  meaning: string | null;
+  pronunciation: string | null;
+  part_of_speech: string | null;
+  position: number;
+}
+
+export interface Sentence {
+  id: string;
+  word_id: string;
+  text: string;
+  translation: string | null;
+  form: string;
+  variation_index: number;
+  is_ai_generated: boolean;
+}
+
+export interface LearningItem {
+  id: string;
+  device_id: string;
+  set_id: string;
+  word_id: string;
+  sentence_id: string | null;
+  skill: Skill;
+  form: string;
+  mastery: number;
+  state: MasteryState;
+  attempts: number;
+  mistakes: number;
+  streak: number;
+  difficulty: number;
+  ease: number;
+  interval_days: number;
+  last_reviewed_at: string | null;
+  next_review_at: string;
+}
+
+export interface Learner {
+  device_id: string;
+  display_name: string;
+  learning_language: string;
+  native_language: string;
+  daily_goal_minutes: number;
+  streak: number;
+  longest_streak: number;
+  notifications_enabled: boolean;
+  audio_autoplay: boolean;
+}
+
+export interface DailyProgress {
+  id: string;
+  device_id: string;
+  day: string;
+  minutes_practiced: number;
+  items_completed: number;
+  goal_minutes: number;
+}
+
+export interface SetSummary extends WordSet {
+  wordCount: number;
+  mastery: number;
+  dueCount: number;
+}
+
+/** One step inside a learning session. */
+export interface Exercise {
+  item: LearningItem;
+  word: Word;
+  sentence: Sentence | null;
+  skill: Skill;
+}
+
+export const SKILL_LABEL: Record<Skill, string> = {
+  recognition: "Words",
+  listening: "Listening",
+  reading: "Reading",
+  writing: "Writing",
+  speaking: "Speaking",
+  recall: "Recall",
+  sentence_usage: "Sentences",
+  form: "Forms & tenses",
+};
