@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AddRouteImport } from './routes/add'
 import { Route as PracticeRouteImport } from './routes/practice'
+import { Route as ProfileRouteImport } from './routes/profile'
 import { Route as ReviewRouteImport } from './routes/review'
 import { Route as SetsIndexRouteImport } from './routes/sets.index'
 import { Route as SetsSetIdRouteImport } from './routes/sets.$setId'
@@ -30,6 +31,11 @@ const AddRoute = AddRouteImport.update({
 const PracticeRoute = PracticeRouteImport.update({
   id: '/practice',
   path: '/practice',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProfileRoute = ProfileRouteImport.update({
+  id: '/profile',
+  path: '/profile',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ReviewRoute = ReviewRouteImport.update({
@@ -57,6 +63,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/add': typeof AddRoute
   '/practice': typeof PracticeRoute
+  '/profile': typeof ProfileRoute
   '/review': typeof ReviewRoute
   '/sets/$setId': typeof SetsSetIdRouteWithChildren
   '/sets/': typeof SetsIndexRoute
@@ -66,6 +73,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/add': typeof AddRoute
   '/practice': typeof PracticeRoute
+  '/profile': typeof ProfileRoute
   '/review': typeof ReviewRoute
   '/sets/$setId': typeof SetsSetIdRouteWithChildren
   '/sets': typeof SetsIndexRoute
@@ -76,6 +84,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/add': typeof AddRoute
   '/practice': typeof PracticeRoute
+  '/profile': typeof ProfileRoute
   '/review': typeof ReviewRoute
   '/sets/$setId': typeof SetsSetIdRouteWithChildren
   '/sets/': typeof SetsIndexRoute
@@ -87,6 +96,7 @@ export interface FileRouteTypes {
     | '/'
     | '/add'
     | '/practice'
+    | '/profile'
     | '/review'
     | '/sets/$setId'
     | '/sets/'
@@ -96,6 +106,7 @@ export interface FileRouteTypes {
     | '/'
     | '/add'
     | '/practice'
+    | '/profile'
     | '/review'
     | '/sets/$setId'
     | '/sets'
@@ -105,6 +116,7 @@ export interface FileRouteTypes {
     | '/'
     | '/add'
     | '/practice'
+    | '/profile'
     | '/review'
     | '/sets/$setId'
     | '/sets/'
@@ -115,6 +127,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AddRoute: typeof AddRoute
   PracticeRoute: typeof PracticeRoute
+  ProfileRoute: typeof ProfileRoute
   ReviewRoute: typeof ReviewRoute
   SetsSetIdRoute: typeof SetsSetIdRouteWithChildren
   SetsIndexRoute: typeof SetsIndexRoute
@@ -141,6 +154,13 @@ declare module '@tanstack/react-router' {
       path: '/practice'
       fullPath: '/practice'
       preLoaderRoute: typeof PracticeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/profile': {
+      id: '/profile'
+      path: '/profile'
+      fullPath: '/profile'
+      preLoaderRoute: typeof ProfileRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/review': {
@@ -190,6 +210,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AddRoute: AddRoute,
   PracticeRoute: PracticeRoute,
+  ProfileRoute: ProfileRoute,
   ReviewRoute: ReviewRoute,
   SetsSetIdRoute: SetsSetIdRouteWithChildren,
   SetsIndexRoute: SetsIndexRoute,
