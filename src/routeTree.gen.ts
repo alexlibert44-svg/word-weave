@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AddRouteImport } from './routes/add'
+import { Route as PracticeRouteImport } from './routes/practice'
 import { Route as SetsIndexRouteImport } from './routes/sets.index'
 
 const IndexRoute = IndexRouteImport.update({
@@ -23,6 +24,11 @@ const AddRoute = AddRouteImport.update({
   path: '/add',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PracticeRoute = PracticeRouteImport.update({
+  id: '/practice',
+  path: '/practice',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SetsIndexRoute = SetsIndexRouteImport.update({
   id: '/sets/',
   path: '/sets/',
@@ -32,30 +38,34 @@ const SetsIndexRoute = SetsIndexRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/add': typeof AddRoute
+  '/practice': typeof PracticeRoute
   '/sets/': typeof SetsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/add': typeof AddRoute
+  '/practice': typeof PracticeRoute
   '/sets': typeof SetsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/add': typeof AddRoute
+  '/practice': typeof PracticeRoute
   '/sets/': typeof SetsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/add' | '/sets/'
+  fullPaths: '/' | '/add' | '/practice' | '/sets/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/add' | '/sets'
-  id: '__root__' | '/' | '/add' | '/sets/'
+  to: '/' | '/add' | '/practice' | '/sets'
+  id: '__root__' | '/' | '/add' | '/practice' | '/sets/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AddRoute: typeof AddRoute
+  PracticeRoute: typeof PracticeRoute
   SetsIndexRoute: typeof SetsIndexRoute
 }
 
@@ -75,6 +85,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AddRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/practice': {
+      id: '/practice'
+      path: '/practice'
+      fullPath: '/practice'
+      preLoaderRoute: typeof PracticeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/sets/': {
       id: '/sets/'
       path: '/sets'
@@ -88,6 +105,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AddRoute: AddRoute,
+  PracticeRoute: PracticeRoute,
   SetsIndexRoute: SetsIndexRoute,
 }
 export const routeTree = rootRouteImport
