@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AddRouteImport } from './routes/add'
 import { Route as PracticeRouteImport } from './routes/practice'
 import { Route as SetsIndexRouteImport } from './routes/sets.index'
+import { Route as SetsSetIdRouteImport } from './routes/sets.$setId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -34,17 +35,24 @@ const SetsIndexRoute = SetsIndexRouteImport.update({
   path: '/sets/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SetsSetIdRoute = SetsSetIdRouteImport.update({
+  id: '/sets/$setId',
+  path: '/sets/$setId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/add': typeof AddRoute
   '/practice': typeof PracticeRoute
+  '/sets/$setId': typeof SetsSetIdRoute
   '/sets/': typeof SetsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/add': typeof AddRoute
   '/practice': typeof PracticeRoute
+  '/sets/$setId': typeof SetsSetIdRoute
   '/sets': typeof SetsIndexRoute
 }
 export interface FileRoutesById {
@@ -52,20 +60,22 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/add': typeof AddRoute
   '/practice': typeof PracticeRoute
+  '/sets/$setId': typeof SetsSetIdRoute
   '/sets/': typeof SetsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/add' | '/practice' | '/sets/'
+  fullPaths: '/' | '/add' | '/practice' | '/sets/$setId' | '/sets/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/add' | '/practice' | '/sets'
-  id: '__root__' | '/' | '/add' | '/practice' | '/sets/'
+  to: '/' | '/add' | '/practice' | '/sets/$setId' | '/sets'
+  id: '__root__' | '/' | '/add' | '/practice' | '/sets/$setId' | '/sets/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AddRoute: typeof AddRoute
   PracticeRoute: typeof PracticeRoute
+  SetsSetIdRoute: typeof SetsSetIdRoute
   SetsIndexRoute: typeof SetsIndexRoute
 }
 
@@ -99,6 +109,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SetsIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/sets/$setId': {
+      id: '/sets/$setId'
+      path: '/sets/$setId'
+      fullPath: '/sets/$setId'
+      preLoaderRoute: typeof SetsSetIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -106,6 +123,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AddRoute: AddRoute,
   PracticeRoute: PracticeRoute,
+  SetsSetIdRoute: SetsSetIdRoute,
   SetsIndexRoute: SetsIndexRoute,
 }
 export const routeTree = rootRouteImport
