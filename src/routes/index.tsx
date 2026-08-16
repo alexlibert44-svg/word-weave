@@ -61,7 +61,7 @@ function Home() {
 
   const recent = sets?.[0];
   const goal = learner?.daily_goal_minutes ?? 15;
-  const minutes = today?.minutes ?? 0;
+  const minutes = today?.minutes_practiced ?? 0;
   const goalPct = Math.min(100, Math.round((minutes / goal) * 100));
 
   return (
