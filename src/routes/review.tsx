@@ -107,7 +107,9 @@ function ReviewPage() {
 
       {total > 0 ? (
         <Button asChild size="lg" className="mt-6 w-full rounded-2xl">
-          <Link to="/practice">Start Review</Link>
+          <Link to="/practice" search={{ set: undefined }}>
+            Start Review
+          </Link>
         </Button>
       ) : (
         <Button asChild size="lg" variant="secondary" className="mt-6 w-full rounded-2xl">
