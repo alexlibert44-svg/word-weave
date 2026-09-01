@@ -54,7 +54,8 @@ Rules:
   3. a different grammatical form, variation_index 2 — use one of: "past", "future", "negative", "question", "plural", "comparative" (choose what fits the word).
   4. another different grammatical form, variation_index 3 — a different label from #3.
 - "pronunciation" is a short readable phonetic hint for the target-language word.
-- "part_of_speech" is one lowercase English word: noun, verb, adjective, adverb, phrase.
+- "part_of_speech" is the word's PRIMARY grammatical class for the learning context, chosen from exactly this list (lowercase English): noun, verb, adjective, adverb, pronoun, preposition, conjunction, determiner, expression, other.
+- "alternative_parts_of_speech" lists other genuine classes of the same word from the same list (e.g. "light" -> ["verb","adjective"]). Use an empty array when the word has only one real class. Never repeat the primary class.
 Return JSON only, no prose, no markdown fences.`;
 
 export const generateSetContent = createServerFn({ method: "POST" })
