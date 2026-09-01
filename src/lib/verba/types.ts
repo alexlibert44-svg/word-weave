@@ -32,6 +32,8 @@ export interface Word {
   meaning: string | null;
   pronunciation: string | null;
   part_of_speech: string | null;
+  /** Other genuine grammatical uses of the same word. */
+  alternative_parts_of_speech?: string[] | null;
   position: number;
 }
 
