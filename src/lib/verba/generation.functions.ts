@@ -26,6 +26,8 @@ const GeneratedWord = z.object({
   translation: z.string().min(1),
   pronunciation: z.string().default(""),
   part_of_speech: z.string().default(""),
+  /** Other genuine grammatical uses of the same word, e.g. "light" as verb. */
+  alternative_parts_of_speech: z.array(z.string().min(1)).default([]),
   sentences: z.array(GeneratedSentence).min(1),
 });
 
