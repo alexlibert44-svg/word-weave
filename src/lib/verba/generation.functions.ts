@@ -106,7 +106,6 @@ Return this exact JSON shape:
       throw new Error("AI returned an unreadable response.");
     }
 
-    console.log("[gen-debug]", cleaned.slice(0, 400));
     const result = z.object({ words: z.array(GeneratedWord).min(1) }).safeParse(parsed);
     if (!result.success) throw new Error("AI returned incomplete lesson content.");
 
