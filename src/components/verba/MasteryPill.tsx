@@ -1,7 +1,9 @@
+import { useI18n, type MessageKey } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { masteryState } from "@/lib/verba/srs";
+import type { MasteryState } from "@/lib/verba/types";
 
-const STYLES: Record<string, string> = {
+const STYLES: Record<MasteryState, string> = {
   new: "bg-muted text-muted-foreground",
   learning: "bg-warning-soft text-accent-foreground",
   familiar: "bg-primary-soft text-primary-deep",
@@ -9,16 +11,17 @@ const STYLES: Record<string, string> = {
   mastered: "bg-primary text-primary-foreground",
 };
 
-const LABELS: Record<string, string> = {
-  new: "New",
-  learning: "Learning",
-  familiar: "Familiar",
-  strong: "Strong",
-  mastered: "Mastered",
+const LABELS: Record<MasteryState, MessageKey> = {
+  new: "mastery.new",
+  learning: "mastery.learning",
+  familiar: "mastery.familiar",
+  strong: "mastery.strong",
+  mastered: "mastery.mastered",
 };
 
 export function MasteryPill({ mastery, className }: { mastery: number; className?: string }) {
-  const state = masteryState(mastery);
+  const { t } = useI18n();
+  const state = masteryState(mastery) as MasteryState;
   return (
     <span
       className={cn(
@@ -27,7 +30,7 @@ export function MasteryPill({ mastery, className }: { mastery: number; className
         className,
       )}
     >
-      {LABELS[state]}
+      {t(LABELS[state])}
     </span>
   );
 }

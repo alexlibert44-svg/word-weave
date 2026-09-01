@@ -1,6 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 
-import { generateWordContent } from "./generation";
+import { generateSetContent } from "./generation.functions";
 import { isDue, priority, schedule } from "./srs";
 import type {
   DailyProgress,
@@ -64,7 +64,10 @@ export async function listSets(deviceId: string): Promise<SetSummary[]> {
       .eq("device_id", deviceId)
       .order("created_at", { ascending: false }),
     supabase.from("words").select("id, set_id"),
-    supabase.from("learning_items").select("set_id, mastery, next_review_at").eq("device_id", deviceId),
+    supabase
+      .from("learning_items")
+      .select("set_id, mastery, next_review_at")
+      .eq("device_id", deviceId),
   ]);
   if (error) throw error;
 
@@ -99,38 +102,62 @@ export async function getSet(setId: string): Promise<{
   };
 }
 
-export async function createSet(
-  deviceId: string,
-  name: string,
-  wordTexts: string[],
-): Promise<string> {
-  if (wordTexts.length < 4) throw new Error("A set needs at least 4 words.");
-  await ensureLearner(deviceId);
+export interface CreateSetInput {
+  deviceId: string;
+  name: string;
+  words: string[];
+  /** Language code of the language being learned. */
+  targetLanguage: string;
+  /** Language code of the learner's own language. */
+  nativeLanguage: string;
+  /** English names, used for the AI prompt. */
+  targetLanguageName: string;
+  nativeLanguageName: string;
+}
+
+export async function createSet(input: CreateSetInput): Promise<string> {
+  if (input.words.length < 4) throw new Error("A set needs at least 4 words.");
+  await ensureLearner(input.deviceId);
+
+  // Generate first: a set is never stored without real lesson content.
+  const generated = await generateSetContent({
+    data: {
+      words: input.words,
+      targetLanguage: input.targetLanguageName,
+      nativeLanguage: input.nativeLanguageName,
+    },
+  });
 
   const { data: set, error } = await supabase
     .from("word_sets")
-    .insert({ device_id: deviceId, name })
+    .insert({
+      device_id: input.deviceId,
+      name: input.name,
+      target_language: input.targetLanguage,
+      native_language: input.nativeLanguage,
+    })
     .select("*")
     .single();
   if (error) throw error;
 
-  await addWordsToSet(deviceId, set.id as string, wordTexts);
+  await storeGenerated(input.deviceId, set.id as string, generated);
   return set.id as string;
 }
 
-/** Creates words + generated sentences + trackable learning items. */
-export async function addWordsToSet(deviceId: string, setId: string, wordTexts: string[]) {
-  const generated = wordTexts.map((text) => ({ text, content: generateWordContent(text) }));
+type Generated = Awaited<ReturnType<typeof generateSetContent>>;
 
+/** Persists AI content as words + sentences + trackable learning items. */
+async function storeGenerated(deviceId: string, setId: string, generated: Generated) {
   const { data: words, error: wordError } = await supabase
     .from("words")
     .insert(
       generated.map((g, index) => ({
         set_id: setId,
-        text: g.text,
-        meaning: g.content.meaning,
-        pronunciation: g.content.pronunciation,
-        part_of_speech: g.content.part_of_speech,
+        text: g.target_word,
+        translation: g.translation,
+        meaning: g.translation,
+        pronunciation: g.pronunciation || null,
+        part_of_speech: g.part_of_speech || null,
         position: index,
       })),
     )
@@ -138,13 +165,14 @@ export async function addWordsToSet(deviceId: string, setId: string, wordTexts: 
   if (wordError) throw wordError;
 
   const sentenceRows = (words ?? []).flatMap((word) => {
-    const content = generated.find((g) => g.text === word.text)?.content;
+    const content = generated.find((g) => g.target_word === word.text);
     return (content?.sentences ?? []).map((s) => ({
       word_id: word.id,
       text: s.text,
       translation: s.translation,
       form: s.form,
       variation_index: s.variation_index,
+      is_ai_generated: true,
     }));
   });
 
@@ -161,26 +189,26 @@ export async function addWordsToSet(deviceId: string, setId: string, wordTexts: 
       device_id: deviceId,
       set_id: setId,
       word_id: word.id,
-      sentence_id: skill === "recognition" ? (base?.id ?? null) : (base?.id ?? null),
+      sentence_id: base?.id ?? null,
       skill,
       form: "base",
       next_review_at: new Date().toISOString(),
     }));
 
-    // Tenses/forms are introduced gradually — scheduled days ahead, never on day 1.
-    const forms = wordSentences
-      .filter((s) => s.form !== "base")
+    // Context variations and grammatical forms are introduced gradually.
+    const extras = wordSentences
+      .filter((s) => !(s.form === "base" && s.variation_index === 0))
       .map((s, index) => ({
         device_id: deviceId,
         set_id: setId,
         word_id: word.id,
         sentence_id: s.id,
-        skill: "form" as Skill,
+        skill: (s.form === "base" ? "sentence_usage" : "form") as Skill,
         form: s.form,
         next_review_at: new Date(Date.now() + (index + 2) * 86400000).toISOString(),
       }));
 
-    return [...core, ...forms];
+    return [...core, ...extras];
   });
 
   const { error: itemError } = await supabase.from("learning_items").insert(itemRows);
@@ -268,7 +296,7 @@ export async function buildQueue(
     const formSentences = wordSentences.filter((s) => s.form === item.form);
     const pickFrom = formSentences.length > 0 ? formSentences : wordSentences;
     const sentence =
-      item.sentence_id && item.skill === "form"
+      item.sentence_id && (item.skill === "form" || item.skill === "sentence_usage")
         ? (wordSentences.find((s) => s.id === item.sentence_id) ?? null)
         : (pickFrom[item.attempts % Math.max(pickFrom.length, 1)] ?? null);
     exercises.push({ item, word, sentence, skill: item.skill });
@@ -292,14 +320,26 @@ export async function buildQueue(
 export interface DueBreakdown {
   total: number;
   bySkill: Partial<Record<Skill, number>>;
+  /** When the next item becomes due, if nothing is due right now. */
+  nextReviewAt: string | null;
 }
 
 export async function getDueBreakdown(deviceId: string): Promise<DueBreakdown> {
-  const { data, error } = await supabase
-    .from("learning_items")
-    .select("skill, next_review_at")
-    .eq("device_id", deviceId)
-    .lte("next_review_at", new Date().toISOString());
+  const now = new Date().toISOString();
+  const [{ data, error }, { data: upcoming }] = await Promise.all([
+    supabase
+      .from("learning_items")
+      .select("skill, next_review_at")
+      .eq("device_id", deviceId)
+      .lte("next_review_at", now),
+    supabase
+      .from("learning_items")
+      .select("next_review_at")
+      .eq("device_id", deviceId)
+      .gt("next_review_at", now)
+      .order("next_review_at", { ascending: true })
+      .limit(1),
+  ]);
   if (error) throw error;
 
   const bySkill: Partial<Record<Skill, number>> = {};
@@ -307,7 +347,11 @@ export async function getDueBreakdown(deviceId: string): Promise<DueBreakdown> {
     const skill = row.skill as Skill;
     bySkill[skill] = (bySkill[skill] ?? 0) + 1;
   }
-  return { total: (data ?? []).length, bySkill };
+  return {
+    total: (data ?? []).length,
+    bySkill,
+    nextReviewAt: upcoming?.[0]?.next_review_at ?? null,
+  };
 }
 
 /** Persists one real attempt and re-schedules the item. */
@@ -398,21 +442,18 @@ function computeStreak(days: { day: string; minutes_practiced: number }[]): numb
 }
 
 export interface ProfileStats {
-  wordsLearned: number;
   totalWords: number;
-  sentencesPracticed: number;
-  speakingAttempts: number;
-  writingAttempts: number;
+  masteredWords: number;
   overallMastery: number;
 }
 
 export async function getProfileStats(deviceId: string): Promise<ProfileStats> {
-  const [{ data: items }, { data: attempts }] = await Promise.all([
-    supabase.from("learning_items").select("word_id, mastery, skill").eq("device_id", deviceId),
-    supabase.from("practice_attempts").select("skill").eq("device_id", deviceId),
-  ]);
+  const { data: items } = await supabase
+    .from("learning_items")
+    .select("word_id, mastery")
+    .eq("device_id", deviceId);
 
-  const rows = (items ?? []) as { word_id: string; mastery: number; skill: Skill }[];
+  const rows = (items ?? []) as { word_id: string; mastery: number }[];
   const byWord = new Map<string, number[]>();
   for (const row of rows) {
     byWord.set(row.word_id, [...(byWord.get(row.word_id) ?? []), Number(row.mastery)]);
@@ -421,15 +462,9 @@ export async function getProfileStats(deviceId: string): Promise<ProfileStats> {
     (values) => values.reduce((a, b) => a + b, 0) / values.length,
   );
 
-  const attemptRows = (attempts ?? []) as { skill: Skill }[];
   return {
-    wordsLearned: wordAverages.filter((m) => m >= 60).length,
     totalWords: wordAverages.length,
-    sentencesPracticed: attemptRows.filter((a) =>
-      ["recall", "writing", "sentence_usage", "form"].includes(a.skill),
-    ).length,
-    speakingAttempts: attemptRows.filter((a) => a.skill === "speaking").length,
-    writingAttempts: attemptRows.filter((a) => a.skill === "writing").length,
+    masteredWords: wordAverages.filter((m) => m >= 85).length,
     overallMastery:
       wordAverages.length === 0
         ? 0

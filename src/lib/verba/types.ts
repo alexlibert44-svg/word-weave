@@ -17,12 +17,18 @@ export interface WordSet {
   is_demo: boolean;
   last_practiced_at: string | null;
   created_at: string;
+  /** Language the sentences in this set are written in. */
+  target_language: string;
+  /** Language the translations in this set are written in. */
+  native_language: string;
 }
 
 export interface Word {
   id: string;
   set_id: string;
   text: string;
+  /** Meaning in the learner's own language. */
+  translation: string | null;
   meaning: string | null;
   pronunciation: string | null;
   part_of_speech: string | null;
@@ -62,13 +68,16 @@ export interface LearningItem {
 export interface Learner {
   device_id: string;
   display_name: string;
+  /** Language being learned. */
   learning_language: string;
+  /** Learner's own language — drives the whole interface. */
   native_language: string;
   daily_goal_minutes: number;
   streak: number;
   longest_streak: number;
   notifications_enabled: boolean;
   audio_autoplay: boolean;
+  onboarding_completed: boolean;
 }
 
 export interface DailyProgress {
@@ -94,13 +103,14 @@ export interface Exercise {
   skill: Skill;
 }
 
-export const SKILL_LABEL: Record<Skill, string> = {
-  recognition: "Words",
-  listening: "Listening",
-  reading: "Reading",
-  writing: "Writing",
-  speaking: "Speaking",
-  recall: "Recall",
-  sentence_usage: "Sentences",
-  form: "Forms & tenses",
-};
+/** i18n key for a skill label; resolved through the active dictionary. */
+export const SKILL_KEY = {
+  recognition: "skill.recognition",
+  listening: "skill.listening",
+  reading: "skill.reading",
+  writing: "skill.writing",
+  speaking: "skill.speaking",
+  recall: "skill.recall",
+  sentence_usage: "skill.sentence_usage",
+  form: "skill.form",
+} as const;
