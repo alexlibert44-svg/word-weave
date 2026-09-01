@@ -1,49 +1,51 @@
 import { useMutation } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import {
-  ArrowRight,
-  Check,
-  Mic,
-  PartyPopper,
-  RotateCcw,
-  Volume2,
-  X,
-} from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { ArrowRight, Check, Mic, PartyPopper, Volume2, X } from "lucide-react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { MasteryBar } from "@/components/verba/MasteryPill";
+import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { logSession, recordAttempt } from "@/lib/verba/api";
 import { listenOnce, speak, speechRecognitionSupported } from "@/lib/verba/speech";
 import { normalize, similarity } from "@/lib/verba/srs";
-import { SKILL_LABEL, type Exercise } from "@/lib/verba/types";
+import { SKILL_KEY, type Exercise } from "@/lib/verba/types";
 
 /** Builds a cloze prompt by hiding the target word inside its sentence. */
 export function cloze(sentence: string, word: string) {
-  const stem = word.toLowerCase().slice(0, Math.max(3, word.length - 2));
+  const stem = normalize(word).slice(0, Math.max(2, word.length - 2));
   const tokens = sentence.split(/(\s+)/);
   const targetIndex = tokens.findIndex((token) => normalize(token).startsWith(stem));
   if (targetIndex === -1) {
-    return { prompt: sentence.replace(word, "___"), answer: word };
+    return { prompt: sentence.replace(word, "____"), answer: word };
   }
   const answer = normalize(tokens[targetIndex] as string);
   const masked = tokens.slice();
-  masked[targetIndex] = "___";
+  masked[targetIndex] = "____";
   return { prompt: masked.join(""), answer };
+}
+
+interface CommonProps {
+  deviceId: string;
+  exercise: Exercise;
+  locale: string;
+  onDone: () => void;
 }
 
 interface SessionProps {
   deviceId: string;
   exercises: Exercise[];
   title: string;
+  /** BCP-47 tag of the language being learned. */
+  locale: string;
   onFinished: () => void;
 }
 
-export function Session({ deviceId, exercises, title, onFinished }: SessionProps) {
+export function Session({ deviceId, exercises, title, locale, onFinished }: SessionProps) {
+  const { t } = useI18n();
   const [index, setIndex] = useState(0);
-  const [completed, setCompleted] = useState(0);
   const startedAt = useRef(Date.now());
   const [done, setDone] = useState(false);
 
@@ -52,37 +54,38 @@ export function Session({ deviceId, exercises, title, onFinished }: SessionProps
 
   const finish = useMutation({
     mutationFn: async () => {
-      const minutes = Math.max(0.5, Math.round(((Date.now() - startedAt.current) / 60000) * 10) / 10);
-      await logSession(deviceId, minutes, completed + 1);
+      const minutes =
+        Math.max(0.5, Math.round(((Date.now() - startedAt.current) / 60000) * 10) / 10);
+      await logSession(deviceId, minutes, total);
     },
     onSuccess: () => {
+      setDone(true);
+      onFinished();
+    },
+    onError: () => {
       setDone(true);
       onFinished();
     },
   });
 
   const advance = () => {
-    if (index + 1 >= total) {
-      finish.mutate();
-    } else {
-      setCompleted((value) => value + 1);
-      setIndex((value) => value + 1);
-    }
+    if (index + 1 >= total) finish.mutate();
+    else setIndex((value) => value + 1);
   };
 
   if (done || !current) {
+    const minutes = Math.max(1, Math.round((Date.now() - startedAt.current) / 60000));
     return (
       <div className="mx-auto flex min-h-screen max-w-md flex-col items-center justify-center px-6 text-center">
         <span className="bg-hero-gradient flex size-20 items-center justify-center rounded-3xl text-primary-foreground shadow-glow">
           <PartyPopper className="size-9" />
         </span>
-        <h1 className="mt-6 text-2xl font-bold">Session complete</h1>
+        <h1 className="mt-6 text-2xl font-bold">{t("practice.done")}</h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          {total} {total === 1 ? "item" : "items"} practiced. Your progress and mistakes were saved
-          for spaced repetition.
+          {t("practice.doneBody", { count: total, minutes })}
         </p>
         <Button asChild size="lg" className="mt-8 w-full rounded-2xl">
-          <Link to="/">Back to Home</Link>
+          <Link to="/">{t("practice.doneHome")}</Link>
         </Button>
       </div>
     );
@@ -94,66 +97,94 @@ export function Session({ deviceId, exercises, title, onFinished }: SessionProps
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold text-muted-foreground">{title}</p>
-            <p className="text-xs text-muted-foreground">{SKILL_LABEL[current.skill]}</p>
+            <p className="text-xs text-muted-foreground">{t(SKILL_KEY[current.skill])}</p>
           </div>
           <span className="text-sm font-bold text-primary">
-            {index + 1} / {total}
+            {t("practice.progress", { current: index + 1, total })}
           </span>
-          <Button asChild variant="ghost" size="icon" aria-label="Exit session">
+          <Button asChild variant="ghost" size="icon" aria-label={t("practice.exit")}>
             <Link to="/">
               <X className="size-5" />
             </Link>
           </Button>
         </div>
-        <MasteryBar value={((index) / total) * 100} className="mt-3" />
+        <MasteryBar value={(index / total) * 100} className="mt-3" />
       </header>
 
       <ExerciseView
         key={current.item.id}
         deviceId={deviceId}
         exercise={current}
+        locale={locale}
         onDone={advance}
       />
     </div>
   );
 }
 
-function ExerciseView({
-  deviceId,
-  exercise,
-  onDone,
-}: {
-  deviceId: string;
-  exercise: Exercise;
-  onDone: () => void;
-}) {
-  switch (exercise.skill) {
+function ExerciseView(props: CommonProps) {
+  switch (props.exercise.skill) {
     case "recognition":
-      return <WordLearning deviceId={deviceId} exercise={exercise} onDone={onDone} />;
+      return <WordLearning {...props} />;
     case "speaking":
-      return <SpeakingExercise deviceId={deviceId} exercise={exercise} onDone={onDone} />;
+      return <SpeakingExercise {...props} />;
     case "recall":
-      return <RecallExercise deviceId={deviceId} exercise={exercise} onDone={onDone} />;
+      return <RecallExercise {...props} />;
     default:
-      return <WritingExercise deviceId={deviceId} exercise={exercise} onDone={onDone} />;
+      return <WritingExercise {...props} />;
   }
+}
+
+/* --------------------------------- helpers --------------------------------- */
+
+function SentenceCard({
+  children,
+  onListen,
+  className,
+}: {
+  children: ReactNode;
+  onListen?: (() => void) | undefined;
+  className?: string;
+}) {
+  const { t } = useI18n();
+  return (
+    <div className={cn("card-surface animate-rise p-6", className)}>
+      {children}
+      {onListen ? (
+        <Button variant="secondary" className="mt-5 w-full rounded-xl" onClick={onListen}>
+          <Volume2 className="size-4" /> {t("common.listen")}
+        </Button>
+      ) : null}
+    </div>
+  );
+}
+
+function Feedback({ score, answer }: { score: number; answer: string }) {
+  const { t } = useI18n();
+  const tone =
+    score >= 0.9
+      ? "bg-success-soft text-success"
+      : score >= 0.6
+        ? "bg-warning-soft text-accent-foreground"
+        : "bg-destructive/10 text-destructive";
+  const label =
+    score >= 0.9 ? t("practice.correct") : score >= 0.6 ? t("practice.almost") : t("practice.wrong");
+  return (
+    <div className={cn("mt-4 rounded-2xl px-4 py-3 text-sm font-semibold", tone)} role="status">
+      {label} {score >= 0.9 ? null : <span className="font-bold">{answer}</span>}
+    </div>
+  );
 }
 
 /* ------------------------------ word learning ------------------------------ */
 
-function WordLearning({
-  deviceId,
-  exercise,
-  onDone,
-}: {
-  deviceId: string;
-  exercise: Exercise;
-  onDone: () => void;
-}) {
+function WordLearning({ deviceId, exercise, locale, onDone }: CommonProps) {
+  const { t } = useI18n();
   const { word, sentence } = exercise;
+
   useEffect(() => {
-    speak(word.text);
-  }, [word.text]);
+    speak(word.text, locale);
+  }, [word.text, locale]);
 
   const save = useMutation({
     mutationFn: () => recordAttempt(deviceId, exercise.item, 0.75, null),
@@ -163,445 +194,273 @@ function WordLearning({
 
   return (
     <div className="flex flex-1 flex-col">
-      <div className="card-surface animate-rise p-6 text-center">
+      <SentenceCard onListen={() => speak(word.text, locale)} className="text-center">
         <p className="text-xs font-bold tracking-widest text-muted-foreground uppercase">
-          New word
+          {t("practice.newWord")}
         </p>
-        <h1 className="mt-3 text-4xl font-bold">{word.text}</h1>
+        <p className="mt-3 text-3xl font-bold" lang={locale}>
+          {word.text}
+        </p>
         {word.pronunciation ? (
           <p className="mt-1 text-sm text-muted-foreground">{word.pronunciation}</p>
         ) : null}
-        <p className="mt-4 text-base font-medium text-primary-deep">“{word.meaning}”</p>
-        <Button
-          variant="secondary"
-          className="mt-5 rounded-xl"
-          onClick={() => speak(word.text)}
-        >
-          <Volume2 className="size-4" /> Listen
-        </Button>
-      </div>
-
-      {sentence ? (
-        <div className="card-surface animate-rise mt-4 p-5">
-          <p className="text-xs font-bold tracking-widest text-muted-foreground uppercase">
-            In a sentence
-          </p>
-          <p className="mt-2 text-lg leading-relaxed font-semibold">{sentence.text}</p>
-          <Button
-            variant="ghost"
-            className="mt-2 px-0 text-primary"
-            onClick={() => speak(sentence.text)}
-          >
-            <Volume2 className="size-4" /> Listen to the sentence
-          </Button>
-        </div>
-      ) : null}
-
-      <div className="mt-auto pt-8">
-        <Button
-          size="lg"
-          className="w-full rounded-2xl"
-          onClick={() => save.mutate()}
-          disabled={save.isPending}
-        >
-          Continue <ArrowRight className="size-5" />
-        </Button>
-      </div>
+        <p className="mt-3 text-base font-semibold text-primary">
+          {word.translation ?? word.meaning}
+        </p>
+        {sentence ? (
+          <div className="mt-5 border-t border-border pt-4">
+            <p className="text-base font-semibold" lang={locale}>
+              {sentence.text}
+            </p>
+            <p className="mt-1 text-sm text-muted-foreground">{sentence.translation}</p>
+          </div>
+        ) : null}
+      </SentenceCard>
+      <p className="mt-4 text-center text-sm text-muted-foreground">{t("practice.newWordBody")}</p>
+      <Button
+        size="lg"
+        className="mt-auto w-full rounded-2xl"
+        onClick={() => save.mutate()}
+        disabled={save.isPending}
+      >
+        {t("common.continue")} <ArrowRight className="size-4 rtl:rotate-180" />
+      </Button>
     </div>
   );
 }
 
-/* ------------------------------ writing / forms ---------------------------- */
+/* -------------------------------- writing --------------------------------- */
 
-function WritingExercise({
-  deviceId,
-  exercise,
-  onDone,
-}: {
-  deviceId: string;
-  exercise: Exercise;
-  onDone: () => void;
-}) {
-  const { word, sentence } = exercise;
-  const task = useMemo(
-    () => cloze(sentence?.text ?? `I want to ${word.text}.`, word.text),
-    [sentence?.text, word.text],
-  );
+function WritingExercise({ deviceId, exercise, locale, onDone }: CommonProps) {
+  const { t } = useI18n();
+  const { word, sentence, skill } = exercise;
+  const source = sentence?.text ?? word.text;
+  const { prompt, answer } = cloze(source, word.text);
   const [value, setValue] = useState("");
-  const [state, setState] = useState<"idle" | "wrong" | "correct">("idle");
-  const [tries, setTries] = useState(0);
+  const [score, setScore] = useState<number | null>(null);
 
-  const check = useMutation({
-    mutationFn: async () => {
-      const correct = normalize(value) === normalize(task.answer);
-      const score = correct ? Math.max(0.55, 1 - tries * 0.25) : 0.2;
-      await recordAttempt(deviceId, exercise.item, score, value);
-      return correct;
-    },
-    onSuccess: (correct) => {
-      if (correct) {
-        setState("correct");
-        speak(sentence?.text ?? task.answer);
-      } else {
-        setState("wrong");
-        setTries((t) => t + 1);
-      }
-    },
+  const save = useMutation({
+    mutationFn: (result: number) => recordAttempt(deviceId, exercise.item, result, value),
   });
+
+  const check = () => {
+    const result = similarity(normalize(value), normalize(answer));
+    setScore(result);
+    save.mutate(result);
+  };
+
+  const title =
+    skill === "form"
+      ? t("practice.formTitle")
+      : skill === "sentence_usage"
+        ? t("practice.variationTitle")
+        : t("practice.writingTitle");
 
   return (
     <div className="flex flex-1 flex-col">
-      <div className="card-surface animate-rise p-6">
-        <p className="text-xs font-bold tracking-widest text-muted-foreground uppercase">
-          {exercise.skill === "form"
-            ? `Complete the sentence · ${exercise.item.form}`
-            : "Complete the sentence"}
+      <h2 className="text-lg font-bold">{title}</h2>
+      <p className="mt-1 text-sm text-muted-foreground">{t("practice.writingHint")}</p>
+      <SentenceCard className="mt-4" onListen={sentence ? () => speak(sentence.text, locale) : undefined}>
+        <p className="text-lg font-semibold leading-relaxed" lang={locale}>
+          {prompt}
         </p>
-        <p className="mt-3 text-2xl leading-snug font-bold">{task.prompt}</p>
-        <p className="mt-3 text-sm text-muted-foreground">Meaning: {word.meaning}</p>
-
-        <Input
-          value={value}
-          onChange={(event) => {
-            setValue(event.target.value);
-            if (state !== "idle") setState("idle");
-          }}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" && value.trim()) {
-              event.preventDefault();
-              if (state === "correct") onDone();
-              else check.mutate();
-            }
-          }}
-          placeholder="Type the missing word"
-          autoCapitalize="none"
-          autoComplete="off"
-          className={cn(
-            "mt-5 h-14 rounded-2xl text-center text-lg font-semibold",
-            state === "wrong" && "border-destructive",
-            state === "correct" && "border-success",
-          )}
-        />
-
-        {state === "wrong" ? (
-          <p className="mt-3 flex items-center gap-2 text-sm font-semibold text-destructive">
-            <RotateCcw className="size-4" /> Try again — keep going until it's right.
-          </p>
+        {sentence?.translation ? (
+          <p className="mt-2 text-sm text-muted-foreground">{sentence.translation}</p>
         ) : null}
-        {state === "correct" ? (
-          <div className="mt-3 rounded-2xl bg-success-soft p-4">
-            <p className="flex items-center gap-2 text-sm font-bold text-success">
-              <Check className="size-4" /> Correct!
-            </p>
-            <p className="mt-1 text-sm text-foreground">{sentence?.text}</p>
-          </div>
-        ) : null}
-        {tries >= 2 && state !== "correct" ? (
-          <p className="mt-3 text-xs text-muted-foreground">
-            Hint: the word starts with “{task.answer.slice(0, 2)}”.
-          </p>
-        ) : null}
-      </div>
+      </SentenceCard>
 
-      <div className="mt-auto pt-8">
-        {state === "correct" ? (
-          <Button size="lg" className="w-full rounded-2xl" onClick={onDone}>
-            Continue <ArrowRight className="size-5" />
-          </Button>
-        ) : (
-          <Button
-            size="lg"
-            className="w-full rounded-2xl"
-            disabled={value.trim().length === 0 || check.isPending}
-            onClick={() => check.mutate()}
-          >
-            Check
-          </Button>
-        )}
-      </div>
+      <Input
+        value={value}
+        onChange={(event) => setValue(event.target.value)}
+        placeholder={t("practice.writingPlaceholder")}
+        aria-label={t("practice.writingPlaceholder")}
+        lang={locale}
+        disabled={score !== null}
+        className="mt-4 h-12 rounded-2xl"
+        onKeyDown={(event) => {
+          if (event.key === "Enter" && score === null && value.trim()) check();
+        }}
+      />
+      {score !== null ? <Feedback score={score} answer={answer} /> : null}
+
+      {score === null ? (
+        <Button
+          size="lg"
+          className="mt-auto w-full rounded-2xl"
+          disabled={!value.trim()}
+          onClick={check}
+        >
+          <Check className="size-4" /> {t("common.check")}
+        </Button>
+      ) : (
+        <Button size="lg" className="mt-auto w-full rounded-2xl" onClick={onDone}>
+          {t("common.next")} <ArrowRight className="size-4 rtl:rotate-180" />
+        </Button>
+      )}
     </div>
   );
 }
 
 /* -------------------------------- speaking -------------------------------- */
 
-function SpeakingExercise({
-  deviceId,
-  exercise,
-  onDone,
-}: {
-  deviceId: string;
-  exercise: Exercise;
-  onDone: () => void;
-}) {
-  const target = exercise.sentence?.text ?? exercise.word.text;
+function SpeakingExercise({ deviceId, exercise, locale, onDone }: CommonProps) {
+  const { t } = useI18n();
+  const { word, sentence } = exercise;
+  const target = sentence?.text ?? word.text;
   const [listening, setListening] = useState(false);
-  const [result, setResult] = useState<{ score: number; transcript: string } | null>(null);
-  const [supported, setSupported] = useState(true);
-  const handle = useRef<{ stop: () => void } | null>(null);
-
-  useEffect(() => {
-    setSupported(speechRecognitionSupported());
-  }, []);
+  const [heard, setHeard] = useState<string | null>(null);
+  const [score, setScore] = useState<number | null>(null);
+  const supported = speechRecognitionSupported();
 
   const save = useMutation({
-    mutationFn: (payload: { score: number; transcript: string | null }) =>
-      recordAttempt(deviceId, exercise.item, payload.score, payload.transcript),
+    mutationFn: (result: number) => recordAttempt(deviceId, exercise.item, result, heard),
   });
 
-  const start = () => {
-    setResult(null);
-    if (!supported) return;
+  const record = () => {
     setListening(true);
-    handle.current = listenOnce(
+    const handle = listenOnce(
       (transcript) => {
         setListening(false);
-        const score = Math.max(0.15, similarity(transcript, target));
-        setResult({ score, transcript });
-        save.mutate({ score, transcript });
+        setHeard(transcript);
+        const result = similarity(normalize(transcript), normalize(target));
+        setScore(result);
+        save.mutate(result);
       },
-      () => {
-        setListening(false);
-        setResult({ score: 0.2, transcript: "" });
-        save.mutate({ score: 0.2, transcript: null });
-      },
+      () => setListening(false),
+      locale,
     );
+    if (!handle) setListening(false);
   };
 
-  const stop = () => {
-    setListening(false);
-    handle.current?.stop();
+  const selfMark = (result: number) => {
+    setScore(result);
+    save.mutate(result);
   };
-
-  const passed = (result?.score ?? 0) >= 0.6;
 
   return (
     <div className="flex flex-1 flex-col">
-      <div className="card-surface animate-rise p-6 text-center">
-        <p className="text-xs font-bold tracking-widest text-muted-foreground uppercase">
-          Say the sentence
+      <h2 className="text-lg font-bold">{t("practice.speakingTitle")}</h2>
+      <SentenceCard className="mt-4" onListen={() => speak(target, locale)}>
+        <p className="text-lg font-semibold leading-relaxed" lang={locale}>
+          {target}
         </p>
-        <p className="mt-3 text-2xl leading-snug font-bold">{target}</p>
-        <Button variant="secondary" className="mt-5 rounded-xl" onClick={() => speak(target)}>
-          <Volume2 className="size-4" /> Listen
-        </Button>
-      </div>
-
-      <div className="mt-8 flex flex-col items-center">
-        <button
-          type="button"
-          onPointerDown={start}
-          onPointerUp={stop}
-          onPointerLeave={stop}
-          disabled={!supported}
-          className={cn(
-            "bg-hero-gradient flex size-28 flex-col items-center justify-center rounded-full text-primary-foreground shadow-glow transition-transform active:scale-95 disabled:opacity-60",
-            listening && "animate-mic-pulse",
-          )}
-          aria-label="Hold to speak"
-        >
-          <Mic className="size-9" />
-          <span className="mt-1 text-[0.7rem] font-bold">
-            {listening ? "Listening..." : "Hold to Speak"}
-          </span>
-        </button>
-
-        {!supported ? (
-          <p className="mt-4 max-w-xs text-center text-xs text-muted-foreground">
-            Speech recognition isn't available in this browser. Say the sentence out loud, then
-            confirm below — your attempt is still recorded.
-          </p>
+        {sentence?.translation ? (
+          <p className="mt-2 text-sm text-muted-foreground">{sentence.translation}</p>
         ) : null}
+      </SentenceCard>
 
-        {result ? (
-          <div
-            className={cn(
-              "mt-6 w-full rounded-2xl p-4 text-center",
-              passed ? "bg-success-soft" : "bg-destructive-soft",
-            )}
+      {heard ? (
+        <p className="mt-4 text-sm text-muted-foreground">
+          {t("practice.speakingHeard", { text: heard })}
+        </p>
+      ) : null}
+      {score !== null ? <Feedback score={score} answer={target} /> : null}
+
+      {score === null ? (
+        supported ? (
+          <button
+            type="button"
+            onClick={record}
+            disabled={listening}
+            className="mt-auto flex flex-col items-center gap-3 py-6"
           >
-            <p
+            <span
               className={cn(
-                "text-sm font-bold",
-                passed ? "text-success" : "text-destructive",
+                "bg-hero-gradient flex size-20 items-center justify-center rounded-full text-primary-foreground shadow-glow",
+                listening && "animate-pulse",
               )}
             >
-              {passed ? "Good pronunciation" : "Try again"}
-            </p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Match {Math.round(result.score * 100)}%
-              {result.transcript ? ` · heard “${result.transcript}”` : ""}
-            </p>
-          </div>
-        ) : null}
-      </div>
-
-      <div className="mt-auto space-y-2 pt-8">
-        {supported ? (
-          result && passed ? (
-            <Button size="lg" className="w-full rounded-2xl" onClick={onDone}>
-              Continue <ArrowRight className="size-5" />
-            </Button>
-          ) : (
-            <>
-              {result ? (
-                <Button size="lg" className="w-full rounded-2xl" onClick={start}>
-                  <RotateCcw className="size-5" /> Try again
-                </Button>
-              ) : null}
-              {result ? (
-                <Button variant="ghost" className="w-full" onClick={onDone}>
-                  Skip for now
-                </Button>
-              ) : null}
-            </>
-          )
+              <Mic className="size-8" />
+            </span>
+            <span className="text-sm font-semibold">
+              {listening ? t("practice.speakingListening") : t("practice.speakingTap")}
+            </span>
+          </button>
         ) : (
-          <Button
-            size="lg"
-            className="w-full rounded-2xl"
-            onClick={() => {
-              save.mutate({ score: 0.7, transcript: null });
-              onDone();
-            }}
-          >
-            I said it <ArrowRight className="size-5" />
-          </Button>
-        )}
-      </div>
+          <div className="mt-auto space-y-2.5">
+            <p className="text-center text-sm text-muted-foreground">
+              {t("practice.speakingUnsupported")}
+            </p>
+            <Button size="lg" className="w-full rounded-2xl" onClick={() => selfMark(0.9)}>
+              {t("practice.speakingSelfOk")}
+            </Button>
+            <Button
+              size="lg"
+              variant="secondary"
+              className="w-full rounded-2xl"
+              onClick={() => selfMark(0.4)}
+            >
+              {t("practice.speakingSelfNo")}
+            </Button>
+          </div>
+        )
+      ) : (
+        <Button size="lg" className="mt-auto w-full rounded-2xl" onClick={onDone}>
+          {t("common.next")} <ArrowRight className="size-4 rtl:rotate-180" />
+        </Button>
+      )}
     </div>
   );
 }
 
 /* --------------------------------- recall --------------------------------- */
 
-function RecallExercise({
-  deviceId,
-  exercise,
-  onDone,
-}: {
-  deviceId: string;
-  exercise: Exercise;
-  onDone: () => void;
-}) {
-  const target = exercise.sentence?.text ?? exercise.word.text;
-  const hint = exercise.sentence?.translation ?? exercise.word.meaning ?? "";
-  const [mode, setMode] = useState<"write" | "speak">("write");
+function RecallExercise({ deviceId, exercise, locale, onDone }: CommonProps) {
+  const { t, target } = useI18n();
+  const { word, sentence } = exercise;
+  const prompt = sentence?.translation ?? word.translation ?? word.meaning ?? word.text;
+  const answer = sentence?.text ?? word.text;
   const [value, setValue] = useState("");
   const [score, setScore] = useState<number | null>(null);
-  const [listening, setListening] = useState(false);
 
   const save = useMutation({
-    mutationFn: (payload: { score: number; response: string | null }) =>
-      recordAttempt(deviceId, exercise.item, payload.score, payload.response),
+    mutationFn: (result: number) => recordAttempt(deviceId, exercise.item, result, value),
   });
 
-  const evaluate = (response: string) => {
-    const value = Math.max(0.15, similarity(response, target));
-    setScore(value);
-    save.mutate({ score: value, response });
+  const check = () => {
+    const result = similarity(normalize(value), normalize(answer));
+    setScore(result);
+    save.mutate(result);
   };
-
-  const passed = (score ?? 0) >= 0.6;
 
   return (
     <div className="flex flex-1 flex-col">
-      <div className="card-surface animate-rise p-6">
-        <p className="text-xs font-bold tracking-widest text-muted-foreground uppercase">
-          Say it in English
-        </p>
-        <p className="mt-3 text-xl leading-snug font-semibold text-primary-deep">“{hint}”</p>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Use the word <span className="font-bold text-foreground">{exercise.word.text}</span>.
-        </p>
+      <h2 className="text-lg font-bold">{t("practice.recallTitle")}</h2>
+      <p className="mt-1 text-sm text-muted-foreground">
+        {t("practice.recallHint", { language: target.native })}
+      </p>
+      <SentenceCard className="mt-4">
+        <p className="text-lg font-semibold leading-relaxed">{prompt}</p>
+      </SentenceCard>
 
-        <div className="mt-5 flex gap-2">
-          <Button
-            variant={mode === "write" ? "default" : "secondary"}
-            className="flex-1 rounded-xl"
-            onClick={() => setMode("write")}
-          >
-            Write
-          </Button>
-          <Button
-            variant={mode === "speak" ? "default" : "secondary"}
-            className="flex-1 rounded-xl"
-            onClick={() => setMode("speak")}
-          >
-            Speak
-          </Button>
-        </div>
+      <Input
+        value={value}
+        onChange={(event) => setValue(event.target.value)}
+        placeholder={t("practice.recallPlaceholder")}
+        aria-label={t("practice.recallPlaceholder")}
+        lang={locale}
+        disabled={score !== null}
+        className="mt-4 h-12 rounded-2xl"
+        onKeyDown={(event) => {
+          if (event.key === "Enter" && score === null && value.trim()) check();
+        }}
+      />
+      {score !== null ? <Feedback score={score} answer={answer} /> : null}
 
-        {mode === "write" ? (
-          <Input
-            value={value}
-            onChange={(event) => setValue(event.target.value)}
-            placeholder="Type the full sentence"
-            className="mt-4 h-14 rounded-2xl text-base"
-          />
-        ) : (
-          <Button
-            variant="secondary"
-            className="mt-4 h-14 w-full rounded-2xl"
-            onClick={() => {
-              if (!speechRecognitionSupported()) {
-                evaluate(target);
-                return;
-              }
-              setListening(true);
-              listenOnce(
-                (transcript) => {
-                  setListening(false);
-                  evaluate(transcript);
-                },
-                () => {
-                  setListening(false);
-                  setScore(0.2);
-                  save.mutate({ score: 0.2, response: null });
-                },
-              );
-            }}
-          >
-            <Mic className="size-5" /> {listening ? "Listening..." : "Tap and say it"}
-          </Button>
-        )}
-
-        {score !== null ? (
-          <div
-            className={cn(
-              "mt-4 rounded-2xl p-4",
-              passed ? "bg-success-soft" : "bg-destructive-soft",
-            )}
-          >
-            <p
-              className={cn("text-sm font-bold", passed ? "text-success" : "text-destructive")}
-            >
-              {passed ? "Well recalled!" : "Not quite — try again"}
-            </p>
-            <p className="mt-1 text-sm text-foreground">Target: {target}</p>
-          </div>
-        ) : null}
-      </div>
-
-      <div className="mt-auto pt-8">
-        {passed ? (
-          <Button size="lg" className="w-full rounded-2xl" onClick={onDone}>
-            Continue <ArrowRight className="size-5" />
-          </Button>
-        ) : (
-          <Button
-            size="lg"
-            className="w-full rounded-2xl"
-            disabled={mode === "write" && value.trim().length === 0}
-            onClick={() => {
-              if (mode === "write") evaluate(value);
-              else setScore(null);
-            }}
-          >
-            {score === null ? "Check" : "Try again"}
-          </Button>
-        )}
-      </div>
+      {score === null ? (
+        <Button
+          size="lg"
+          className="mt-auto w-full rounded-2xl"
+          disabled={!value.trim()}
+          onClick={check}
+        >
+          <Check className="size-4" /> {t("common.check")}
+        </Button>
+      ) : (
+        <Button size="lg" className="mt-auto w-full rounded-2xl" onClick={onDone}>
+          {t("common.next")} <ArrowRight className="size-4 rtl:rotate-180" />
+        </Button>
+      )}
     </div>
   );
 }

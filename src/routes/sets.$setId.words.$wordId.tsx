@@ -1,154 +1,137 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link, createFileRoute } from "@tanstack/react-router";
-import { ArrowLeft, Loader2, Volume2 } from "lucide-react";
+import { ArrowLeft, Volume2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { AppShell } from "@/components/verba/AppShell";
 import { MasteryBar, MasteryPill } from "@/components/verba/MasteryPill";
-import { useDeviceId } from "@/hooks/use-device-id";
+import { useI18n } from "@/lib/i18n";
+import { speechLocale } from "@/lib/i18n/languages";
 import { getWord } from "@/lib/verba/api";
 import { speak } from "@/lib/verba/speech";
-import { SKILL_LABEL } from "@/lib/verba/types";
+import { SKILL_KEY } from "@/lib/verba/types";
 
 export const Route = createFileRoute("/sets/$setId/words/$wordId")({
   head: () => ({
     meta: [
-      { title: "Word Detail — Verba" },
+      { title: "Word Detail — LingoFlow" },
       {
         name: "description",
         content:
-          "Meaning, pronunciation, example sentences and per-skill mastery for a single word in Verba.",
+          "Meaning, pronunciation, example sentences and your skill breakdown for this word.",
       },
-      { property: "og:title", content: "Word Detail — Verba" },
+      { property: "og:title", content: "Word Detail — LingoFlow" },
       {
         property: "og:description",
-        content: "See how well you know this word across writing, speaking and recall.",
+        content: "How well you know this word across writing, speaking and recall.",
       },
     ],
   }),
-  component: WordDetailPage,
-  errorComponent: ({ error }) => (
-    <AppShell>
-      <p role="alert" className="text-sm text-muted-foreground">
-        {error.message}
-      </p>
-    </AppShell>
-  ),
-  notFoundComponent: () => (
-    <AppShell>
-      <p>This word no longer exists.</p>
-    </AppShell>
-  ),
+  component: WordDetail,
 });
 
-function WordDetailPage() {
+function WordDetail() {
   const { setId, wordId } = Route.useParams();
-  const deviceId = useDeviceId();
+  const { t } = useI18n();
 
-  const { data, isPending } = useQuery({
-    queryKey: ["word", wordId, deviceId],
-    queryFn: () => getWord(wordId),
-    enabled: Boolean(deviceId),
-  });
+  const { data } = useQuery({ queryKey: ["word", wordId], queryFn: () => getWord(wordId) });
 
-  if (isPending || !data) {
+  if (!data) {
     return (
       <AppShell>
-        <div className="flex justify-center py-20">
-          <Loader2 className="size-7 animate-spin text-primary" />
-        </div>
+        <Skeleton className="h-40 rounded-2xl" />
       </AppShell>
     );
   }
 
-  const { word, sentences, items } = data;
+  const { word, sentences, items, set } = data;
+  const locale = speechLocale(set.target_language);
+  const example = sentences.find((s) => s.form === "base") ?? sentences[0];
   const mastery =
     items.length === 0
       ? 0
-      : Math.round(items.reduce((sum, item) => sum + Number(item.mastery), 0) / items.length);
-  const example = sentences.find((s) => s.form === "base") ?? sentences[0];
+      : Math.round(items.reduce((sum, i) => sum + Number(i.mastery), 0) / items.length);
 
   return (
     <AppShell>
-      <Button asChild variant="ghost" size="sm" className="mb-3 -ml-2">
+      <Button asChild variant="ghost" size="icon" aria-label={t("word.backToSet")}>
         <Link to="/sets/$setId" params={{ setId }}>
-          <ArrowLeft className="size-4" /> Back to set
+          <ArrowLeft className="size-5 rtl:rotate-180" />
         </Link>
       </Button>
 
-      <div className="card-surface animate-rise p-6">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h1 className="text-3xl font-bold">{word.text}</h1>
-            {word.pronunciation ? (
-              <p className="mt-1 text-sm text-muted-foreground">{word.pronunciation}</p>
-            ) : null}
-          </div>
-          <MasteryPill mastery={mastery} />
-        </div>
-
-        <p className="mt-4 text-base font-medium text-primary-deep">“{word.meaning}”</p>
-        <p className="mt-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-          {word.part_of_speech}
+      <div className="card-surface animate-rise mt-2 p-6 text-center">
+        <p className="text-3xl font-bold" lang={set.target_language}>
+          {word.text}
         </p>
-
-        <Button variant="secondary" className="mt-4 rounded-xl" onClick={() => speak(word.text)}>
-          <Volume2 className="size-4" /> Listen
+        {word.pronunciation ? (
+          <p className="mt-1 text-sm text-muted-foreground">{word.pronunciation}</p>
+        ) : null}
+        {word.part_of_speech ? (
+          <p className="mt-2 text-xs font-semibold tracking-wide text-primary uppercase">
+            {word.part_of_speech}
+          </p>
+        ) : null}
+        <Button
+          variant="secondary"
+          className="mt-4 rounded-xl"
+          onClick={() => speak(word.text, locale)}
+        >
+          <Volume2 className="size-4" /> {t("common.listen")}
         </Button>
       </div>
 
+      <div className="card-surface mt-4 p-5">
+        <p className="text-xs font-bold tracking-wide text-muted-foreground uppercase">
+          {t("word.translation")}
+        </p>
+        <p className="mt-1 text-base font-semibold">{word.translation ?? word.meaning}</p>
+      </div>
+
       {example ? (
-        <div className="card-surface animate-rise mt-4 p-5">
-          <p className="text-xs font-bold tracking-widest text-muted-foreground uppercase">
-            Example sentence
+        <div className="card-surface mt-3 p-5">
+          <p className="text-xs font-bold tracking-wide text-muted-foreground uppercase">
+            {t("word.example")}
           </p>
-          <p className="mt-2 text-lg leading-relaxed font-semibold">{example.text}</p>
+          <p className="mt-1.5 text-base font-semibold" lang={set.target_language}>
+            {example.text}
+          </p>
+          <p className="mt-1 text-sm text-muted-foreground">{example.translation}</p>
           <Button
             variant="ghost"
-            className="mt-1 px-0 text-primary"
-            onClick={() => speak(example.text)}
+            size="sm"
+            className="mt-2 rounded-xl px-2"
+            onClick={() => speak(example.text, locale)}
           >
-            <Volume2 className="size-4" /> Listen
+            <Volume2 className="size-4" /> {t("common.listen")}
           </Button>
         </div>
       ) : null}
 
-      <div className="card-surface animate-rise mt-4 p-5">
-        <div className="flex items-baseline justify-between">
-          <p className="text-sm font-bold">Mastery</p>
-          <p className="text-2xl font-bold text-primary">{mastery}%</p>
+      <div className="card-surface mt-3 p-5">
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-semibold">{t("word.mastery")}</span>
+          <MasteryPill mastery={mastery} />
         </div>
         <MasteryBar value={mastery} className="mt-3" />
-
-        <ul className="mt-5 space-y-3">
-          {items.map((item) => (
-            <li key={item.id}>
-              <div className="flex items-center justify-between text-sm">
-                <span className="font-medium">
-                  {item.skill === "form"
-                    ? `${SKILL_LABEL[item.skill]} · ${item.form}`
-                    : SKILL_LABEL[item.skill]}
-                </span>
-                <span className="font-semibold text-muted-foreground">
-                  {Math.round(Number(item.mastery))}%
-                </span>
-              </div>
-              <MasteryBar value={Number(item.mastery)} className="mt-1.5 h-1.5" />
-              <p className="mt-1 text-[0.7rem] text-muted-foreground">
-                {item.attempts} attempts · {item.mistakes} mistakes
-              </p>
-            </li>
-          ))}
-        </ul>
       </div>
 
-      <div className="mt-8">
-        <Button asChild size="lg" className="w-full rounded-2xl">
-          <Link to="/practice" search={{ set: setId }}>
-            Practice Word
-          </Link>
-        </Button>
-      </div>
+      <h2 className="mt-7 mb-3 text-lg font-bold">{t("word.skills")}</h2>
+      <ul className="space-y-2.5">
+        {items.map((item) => (
+          <li key={item.id} className="card-surface p-4">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-semibold">{t(SKILL_KEY[item.skill])}</span>
+              <span className="text-sm font-bold text-primary">{Math.round(item.mastery)}%</span>
+            </div>
+            <MasteryBar value={Number(item.mastery)} className="mt-2 h-1.5" />
+            <p className="mt-2 text-[0.7rem] text-muted-foreground">
+              {t("word.attempts", { attempts: item.attempts, mistakes: item.mistakes })}
+            </p>
+          </li>
+        ))}
+      </ul>
     </AppShell>
   );
 }

@@ -1,30 +1,33 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { Award, Bell, Flame, Globe, Target, Trophy, Volume2 } from "lucide-react";
+import { Flame, Languages } from "lucide-react";
+import { useState } from "react";
 
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { AppShell, PageTitle } from "@/components/verba/AppShell";
-import { MasteryBar } from "@/components/verba/MasteryPill";
-import { useDeviceId } from "@/hooks/use-device-id";
-import { ensureLearner, getProfileStats, updateLearner } from "@/lib/verba/api";
+import { useLearner } from "@/components/verba/AppGate";
+import { useI18n } from "@/lib/i18n";
+import { LANGUAGES } from "@/lib/i18n/languages";
+import { getProfileStats, updateLearner } from "@/lib/verba/api";
 import type { Learner } from "@/lib/verba/types";
+
+const GOALS = [5, 10, 15, 30];
 
 export const Route = createFileRoute("/profile")({
   head: () => ({
     meta: [
-      { title: "Your Profile — Verba" },
+      { title: "Profile — LingoFlow" },
       {
         name: "description",
         content:
-          "Your Verba learning stats: words learned, sentences practiced, streaks, daily goal and learning settings.",
+          "Your languages, daily goal and real progress: words learned, mastery and your streak.",
       },
-      { property: "og:title", content: "Your Profile — Verba" },
+      { property: "og:title", content: "Profile — LingoFlow" },
       {
         property: "og:description",
-        content: "Streaks, achievements and learning settings in one place.",
+        content: "Change your languages and daily goal, and see your real progress.",
       },
     ],
   }),
@@ -32,155 +35,164 @@ export const Route = createFileRoute("/profile")({
 });
 
 function ProfilePage() {
-  const deviceId = useDeviceId();
-  const queryClient = useQueryClient();
+  const { deviceId, learner, refresh } = useLearner();
+  const { t } = useI18n();
+  const [name, setName] = useState(learner.display_name ?? "");
 
-  const { data: learner } = useQuery({
-    queryKey: ["learner", deviceId],
-    queryFn: () => ensureLearner(deviceId as string),
-    enabled: Boolean(deviceId),
-  });
   const { data: stats } = useQuery({
     queryKey: ["stats", deviceId],
-    queryFn: () => getProfileStats(deviceId as string),
-    enabled: Boolean(deviceId),
+    queryFn: () => getProfileStats(deviceId),
   });
 
   const save = useMutation({
-    mutationFn: (patch: Partial<Omit<Learner, "device_id">>) =>
-      updateLearner(deviceId as string, patch),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["learner"] });
-    },
+    mutationFn: (patch: Partial<Omit<Learner, "device_id">>) => updateLearner(deviceId, patch),
+    onSuccess: refresh,
   });
-
-  if (!learner || !stats) {
-    return (
-      <AppShell>
-        <PageTitle title="Profile" />
-        <Skeleton className="h-40 rounded-3xl" />
-      </AppShell>
-    );
-  }
-
-  const achievements = [
-    { label: "First set created", earned: stats.totalWords > 0, icon: Award },
-    { label: "10 sentences practiced", earned: stats.sentencesPracticed >= 10, icon: Trophy },
-    { label: "3-day streak", earned: learner.streak >= 3, icon: Flame },
-    { label: "First word mastered", earned: stats.wordsLearned > 0, icon: Target },
-  ];
 
   return (
     <AppShell>
-      <PageTitle title="Profile" subtitle={learner.display_name} />
+      <PageTitle title={t("profile.title")} />
 
-      <div className="card-surface animate-rise p-5">
-        <div className="flex items-baseline justify-between">
-          <p className="text-sm font-bold">Overall progress</p>
-          <p className="text-2xl font-bold text-primary">{stats.overallMastery}%</p>
+      <div className="card-surface p-5">
+        <label className="text-sm font-semibold" htmlFor="display-name">
+          {t("profile.nameLabel")}
+        </label>
+        <div className="mt-2 flex gap-2">
+          <Input
+            id="display-name"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            className="h-11 rounded-xl"
+          />
+          <Button
+            className="h-11 rounded-xl"
+            onClick={() => save.mutate({ display_name: name.trim() })}
+            disabled={save.isPending}
+          >
+            {t("common.save")}
+          </Button>
         </div>
-        <MasteryBar value={stats.overallMastery} className="mt-3" />
-
-        <dl className="mt-5 grid grid-cols-2 gap-3 text-sm">
-          <Stat label="Words learned" value={`${stats.wordsLearned} / ${stats.totalWords}`} />
-          <Stat label="Sentences practiced" value={stats.sentencesPracticed} />
-          <Stat label="Speaking practice" value={stats.speakingAttempts} />
-          <Stat label="Writing practice" value={stats.writingAttempts} />
-          <Stat label="Current streak" value={`${learner.streak} days`} />
-          <Stat label="Longest streak" value={`${learner.longest_streak} days`} />
-        </dl>
       </div>
 
-      <h2 className="mt-7 mb-3 text-lg font-bold">Achievements</h2>
-      <ul className="grid grid-cols-2 gap-3">
-        {achievements.map(({ label, earned, icon: Icon }) => (
-          <li
-            key={label}
-            className={
-              earned
-                ? "card-surface flex flex-col items-center gap-2 p-4 text-center"
-                : "flex flex-col items-center gap-2 rounded-2xl border border-dashed border-border p-4 text-center opacity-60"
-            }
-          >
-            <Icon className={earned ? "size-6 text-accent" : "size-6 text-muted-foreground"} />
-            <span className="text-xs font-semibold">{label}</span>
+      <h2 className="mt-6 mb-3 flex items-center gap-2 text-lg font-bold">
+        <Languages className="size-4 text-primary" /> {t("profile.languages")}
+      </h2>
+      <div className="card-surface space-y-4 p-5">
+        <LanguageSelect
+          label={t("profile.native")}
+          value={learner.native_language}
+          onChange={(code) => save.mutate({ native_language: code })}
+        />
+        <LanguageSelect
+          label={t("profile.target")}
+          value={learner.learning_language}
+          onChange={(code) => save.mutate({ learning_language: code })}
+        />
+        <p className="text-xs text-muted-foreground">{t("profile.targetChangeNote")}</p>
+      </div>
+
+      <h2 className="mt-6 mb-3 text-lg font-bold">{t("profile.goal")}</h2>
+      <ul className="grid grid-cols-4 gap-2">
+        {GOALS.map((minutes) => (
+          <li key={minutes}>
+            <button
+              type="button"
+              onClick={() => save.mutate({ daily_goal_minutes: minutes })}
+              aria-pressed={learner.daily_goal_minutes === minutes}
+              className={
+                learner.daily_goal_minutes === minutes
+                  ? "w-full rounded-2xl bg-primary py-3 text-sm font-bold text-primary-foreground"
+                  : "w-full rounded-2xl bg-card py-3 text-sm font-semibold text-foreground shadow-card"
+              }
+            >
+              {minutes} {t("common.minutesShort")}
+            </button>
           </li>
         ))}
       </ul>
 
-      <h2 className="mt-7 mb-3 text-lg font-bold">Settings</h2>
+      <h2 className="mt-6 mb-3 text-lg font-bold">{t("profile.settings")}</h2>
       <div className="card-surface divide-y divide-border">
-        <SettingRow icon={Globe} label="Learning language">
-          <Input
-            value={learner.learning_language}
-            onChange={(event) => save.mutate({ learning_language: event.target.value })}
-            className="h-9 w-32 rounded-lg text-right"
-          />
-        </SettingRow>
-        <SettingRow icon={Globe} label="Native language">
-          <Input
-            value={learner.native_language}
-            onChange={(event) => save.mutate({ native_language: event.target.value })}
-            className="h-9 w-32 rounded-lg text-right"
-          />
-        </SettingRow>
-        <SettingRow icon={Target} label="Daily goal (minutes)">
-          <Input
-            type="number"
-            min={5}
-            max={120}
-            value={learner.daily_goal_minutes}
-            onChange={(event) =>
-              save.mutate({ daily_goal_minutes: Number(event.target.value) || 15 })
-            }
-            className="h-9 w-20 rounded-lg text-right"
-          />
-        </SettingRow>
-        <SettingRow icon={Bell} label="Notifications">
-          <Switch
-            checked={learner.notifications_enabled}
-            onCheckedChange={(checked) => save.mutate({ notifications_enabled: checked })}
-          />
-        </SettingRow>
-        <SettingRow icon={Volume2} label="Autoplay audio">
+        <div className="flex items-center justify-between p-4">
+          <span className="text-sm font-semibold">{t("profile.audio")}</span>
           <Switch
             checked={learner.audio_autoplay}
             onCheckedChange={(checked) => save.mutate({ audio_autoplay: checked })}
+            aria-label={t("profile.audio")}
           />
-        </SettingRow>
+        </div>
+        <div className="flex items-center justify-between p-4">
+          <span className="text-sm font-semibold">{t("profile.notifications")}</span>
+          <Switch
+            checked={learner.notifications_enabled}
+            onCheckedChange={(checked) => save.mutate({ notifications_enabled: checked })}
+            aria-label={t("profile.notifications")}
+          />
+        </div>
       </div>
 
-      <p className="mt-4 text-xs text-muted-foreground">
-        Account: this device. Sign-in and cross-device sync arrive in a later release, so your sets
-        currently live on this device's profile.
-      </p>
+      <h2 className="mt-6 mb-3 text-lg font-bold">{t("profile.stats")}</h2>
+      <ul className="grid grid-cols-2 gap-2.5">
+        <StatCard label={t("profile.statWords")} value={stats?.totalWords ?? 0} />
+        <StatCard label={t("profile.statMastered")} value={stats?.masteredWords ?? 0} />
+        <StatCard label={t("common.mastery")} value={`${stats?.overallMastery ?? 0}%`} />
+        <StatCard
+          label={t("profile.statStreak")}
+          value={learner.streak}
+          icon={<Flame className="size-4 text-accent" />}
+        />
+        <StatCard label={t("profile.statLongest")} value={learner.longest_streak} />
+      </ul>
+
+      <p className="mt-5 text-center text-xs text-muted-foreground">{t("profile.deviceNote")}</p>
     </AppShell>
   );
 }
 
-function Stat({ label, value }: { label: string; value: string | number }) {
+function StatCard({
+  label,
+  value,
+  icon,
+}: {
+  label: string;
+  value: string | number;
+  icon?: React.ReactNode;
+}) {
   return (
-    <div className="rounded-2xl bg-secondary p-3">
-      <dt className="text-[0.7rem] font-semibold text-muted-foreground">{label}</dt>
-      <dd className="mt-0.5 text-base font-bold">{value}</dd>
-    </div>
+    <li className="card-surface p-4">
+      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        {icon}
+        {label}
+      </div>
+      <p className="mt-1 text-xl font-bold">{value}</p>
+    </li>
   );
 }
 
-function SettingRow({
-  icon: Icon,
+function LanguageSelect({
   label,
-  children,
+  value,
+  onChange,
 }: {
-  icon: typeof Bell;
   label: string;
-  children: React.ReactNode;
+  value: string;
+  onChange: (code: string) => void;
 }) {
   return (
-    <div className="flex items-center gap-3 p-4">
-      <Icon className="size-4 text-muted-foreground" />
-      <Label className="flex-1 text-sm font-semibold">{label}</Label>
-      {children}
+    <div>
+      <label className="text-sm font-semibold">{label}</label>
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        aria-label={label}
+        className="mt-1.5 h-11 w-full rounded-xl border border-input bg-background px-3 text-sm font-semibold"
+      >
+        {LANGUAGES.map((lang) => (
+          <option key={lang.code} value={lang.code}>
+            {lang.native} — {lang.english}
+          </option>
+        ))}
+      </select>
     </div>
   );
 }

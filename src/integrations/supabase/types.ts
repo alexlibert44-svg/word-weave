@@ -52,6 +52,7 @@ export type Database = {
           longest_streak: number
           native_language: string
           notifications_enabled: boolean
+          onboarding_completed: boolean
           streak: number
         }
         Insert: {
@@ -64,6 +65,7 @@ export type Database = {
           longest_streak?: number
           native_language?: string
           notifications_enabled?: boolean
+          onboarding_completed?: boolean
           streak?: number
         }
         Update: {
@@ -76,6 +78,7 @@ export type Database = {
           longest_streak?: number
           native_language?: string
           notifications_enabled?: boolean
+          onboarding_completed?: boolean
           streak?: number
         }
         Relationships: []
@@ -255,6 +258,8 @@ export type Database = {
           is_demo: boolean
           last_practiced_at: string | null
           name: string
+          native_language: string
+          target_language: string
         }
         Insert: {
           created_at?: string
@@ -263,6 +268,8 @@ export type Database = {
           is_demo?: boolean
           last_practiced_at?: string | null
           name: string
+          native_language?: string
+          target_language?: string
         }
         Update: {
           created_at?: string
@@ -271,6 +278,8 @@ export type Database = {
           is_demo?: boolean
           last_practiced_at?: string | null
           name?: string
+          native_language?: string
+          target_language?: string
         }
         Relationships: []
       }
@@ -284,6 +293,7 @@ export type Database = {
           pronunciation: string | null
           set_id: string
           text: string
+          translation: string | null
         }
         Insert: {
           created_at?: string
@@ -294,6 +304,7 @@ export type Database = {
           pronunciation?: string | null
           set_id: string
           text: string
+          translation?: string | null
         }
         Update: {
           created_at?: string
@@ -304,6 +315,7 @@ export type Database = {
           pronunciation?: string | null
           set_id?: string
           text?: string
+          translation?: string | null
         }
         Relationships: [
           {

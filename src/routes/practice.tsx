@@ -3,8 +3,10 @@ import { Link, createFileRoute } from "@tanstack/react-router";
 import { Loader2, Sparkles } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { useLearner } from "@/components/verba/AppGate";
 import { Session } from "@/components/verba/Session";
-import { useDeviceId } from "@/hooks/use-device-id";
+import { useI18n } from "@/lib/i18n";
+import { speechLocale } from "@/lib/i18n/languages";
 import { buildQueue, getSet } from "@/lib/verba/api";
 
 export const Route = createFileRoute("/practice")({
@@ -13,16 +15,16 @@ export const Route = createFileRoute("/practice")({
   }),
   head: () => ({
     meta: [
-      { title: "Practice Session — Verba" },
+      { title: "Practice Session — LingoFlow" },
       {
         name: "description",
         content:
-          "A focused Verba session: listen, write, speak and recall your words inside real sentences.",
+          "A focused LingoFlow session: listen, write, speak and recall your words inside real sentences.",
       },
-      { property: "og:title", content: "Practice Session — Verba" },
+      { property: "og:title", content: "Practice Session — LingoFlow" },
       {
         property: "og:description",
-        content: "One objective at a time: listening, writing, speaking and recall.",
+        content: "One objective at a time: writing, speaking, recall, variations and forms.",
       },
     ],
   }),
@@ -32,7 +34,7 @@ export const Route = createFileRoute("/practice")({
       <div>
         <p className="text-sm text-muted-foreground">{error.message}</p>
         <Button asChild className="mt-4 rounded-xl">
-          <Link to="/">Back to Home</Link>
+          <Link to="/">Home</Link>
         </Button>
       </div>
     </div>
@@ -42,13 +44,13 @@ export const Route = createFileRoute("/practice")({
 
 function PracticePage() {
   const { set: setId } = Route.useSearch();
-  const deviceId = useDeviceId();
+  const { deviceId } = useLearner();
+  const { t, targetSpeech } = useI18n();
   const queryClient = useQueryClient();
 
   const { data: exercises, isPending } = useQuery({
     queryKey: ["queue", deviceId, setId ?? "review"],
-    queryFn: () => buildQueue(deviceId as string, setId ?? null),
-    enabled: Boolean(deviceId),
+    queryFn: () => buildQueue(deviceId, setId ?? null),
     staleTime: Infinity,
     gcTime: 0,
   });
@@ -59,7 +61,7 @@ function PracticePage() {
     enabled: Boolean(setId),
   });
 
-  if (!deviceId || isPending) {
+  if (isPending) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <Loader2 className="size-7 animate-spin text-primary" />
@@ -71,25 +73,30 @@ function PracticePage() {
     return (
       <div className="mx-auto flex min-h-screen max-w-md flex-col items-center justify-center px-6 text-center">
         <Sparkles className="size-9 text-accent" />
-        <h1 className="mt-5 text-xl font-bold">Nothing due right now</h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Everything here is scheduled for later. Spaced repetition works best when you come back
-          when items are due.
-        </p>
+        <h1 className="mt-5 text-xl font-bold">{t("practice.empty")}</h1>
+        <p className="mt-2 text-sm text-muted-foreground">{t("practice.emptyBody")}</p>
         <Button asChild size="lg" className="mt-8 w-full rounded-2xl">
-          <Link to="/">Back to Home</Link>
+          <Link to="/">{t("practice.doneHome")}</Link>
         </Button>
       </div>
     );
   }
 
+  const locale = setInfo ? speechLocale(setInfo.set.target_language) : targetSpeech;
+  const title = setInfo?.set.name ?? t("review.title");
+
   return (
     <Session
       deviceId={deviceId}
       exercises={exercises}
-      title={setId ? (setInfo?.set.name ?? "Practice") : "Daily Review"}
+      title={title}
+      locale={locale}
       onFinished={() => {
-        void queryClient.invalidateQueries();
+        void queryClient.invalidateQueries({ queryKey: ["due", deviceId] });
+        void queryClient.invalidateQueries({ queryKey: ["sets", deviceId] });
+        void queryClient.invalidateQueries({ queryKey: ["daily", deviceId] });
+        void queryClient.invalidateQueries({ queryKey: ["learner", deviceId] });
+        if (setId) void queryClient.invalidateQueries({ queryKey: ["set", setId] });
       }}
     />
   );

@@ -1,130 +1,148 @@
-import { useQuery } from "@tanstack/react-query";
-import { Link, createFileRoute } from "@tanstack/react-router";
-import { ArrowLeft, CalendarClock, ChevronRight, Loader2 } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
+import { ArrowLeft, ChevronRight, Play, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { AppShell } from "@/components/verba/AppShell";
 import { MasteryBar, MasteryPill } from "@/components/verba/MasteryPill";
-import { useDeviceId } from "@/hooks/use-device-id";
-import { getSet } from "@/lib/verba/api";
-import { isDue } from "@/lib/verba/srs";
+import { useI18n } from "@/lib/i18n";
+import { language } from "@/lib/i18n/languages";
+import { deleteSet, getSet } from "@/lib/verba/api";
 
 export const Route = createFileRoute("/sets/$setId")({
   head: () => ({
     meta: [
-      { title: "Word Set — Verba" },
+      { title: "Word Set — LingoFlow" },
       {
         name: "description",
-        content:
-          "Inside a Verba word set: every word with its own mastery level, reviews due and practice entry point.",
+        content: "Every word in this set with its mastery, review count and practice history.",
       },
-      { property: "og:title", content: "Word Set — Verba" },
+      { property: "og:title", content: "Word Set — LingoFlow" },
       {
         property: "og:description",
-        content: "See mastery per word and start practicing this set.",
+        content: "See how well you know each word and practice the whole set.",
       },
     ],
   }),
-  component: SetDetailPage,
-  errorComponent: ({ error }) => (
-    <AppShell>
-      <p role="alert" className="text-sm text-muted-foreground">
-        {error.message}
-      </p>
-    </AppShell>
-  ),
-  notFoundComponent: () => (
-    <AppShell>
-      <p>This set no longer exists.</p>
-    </AppShell>
-  ),
+  component: SetDetail,
 });
 
-function SetDetailPage() {
+function SetDetail() {
   const { setId } = Route.useParams();
-  const deviceId = useDeviceId();
+  const { t } = useI18n();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
-  const { data, isPending } = useQuery({
-    queryKey: ["set", setId, deviceId],
-    queryFn: () => getSet(setId),
-    enabled: Boolean(deviceId),
+  const { data } = useQuery({ queryKey: ["set", setId], queryFn: () => getSet(setId) });
+
+  const remove = useMutation({
+    mutationFn: () => deleteSet(setId),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["sets"] });
+      void navigate({ to: "/sets" });
+    },
   });
 
-  if (isPending || !data) {
+  if (!data) {
     return (
       <AppShell>
-        <div className="flex justify-center py-20">
-          <Loader2 className="size-7 animate-spin text-primary" />
-        </div>
+        <Skeleton className="h-32 rounded-2xl" />
       </AppShell>
     );
   }
 
   const { set, words, items } = data;
+  const now = Date.now();
+  const dueCount = items.filter((i) => new Date(i.next_review_at).getTime() <= now).length;
   const mastery =
     items.length === 0
       ? 0
-      : Math.round(items.reduce((sum, item) => sum + Number(item.mastery), 0) / items.length);
-  const dueCount = items.filter((item) => isDue(item)).length;
-
-  const wordMastery = (wordId: string) => {
-    const wordItems = items.filter((item) => item.word_id === wordId);
-    if (wordItems.length === 0) return 0;
-    return Math.round(
-      wordItems.reduce((sum, item) => sum + Number(item.mastery), 0) / wordItems.length,
-    );
-  };
+      : Math.round(items.reduce((sum, i) => sum + Number(i.mastery), 0) / items.length);
 
   return (
     <AppShell>
-      <div className="bg-hero-gradient animate-rise -mx-5 -mt-6 rounded-b-4xl px-5 pt-6 pb-8 text-primary-foreground">
-        <Button asChild variant="ghost" size="sm" className="mb-3 -ml-2 hover:bg-primary-foreground/10">
+      <div className="animate-rise flex items-center justify-between gap-2">
+        <Button asChild variant="ghost" size="icon" aria-label={t("common.back")}>
           <Link to="/sets">
-            <ArrowLeft className="size-4" /> My Sets
+            <ArrowLeft className="size-5 rtl:rotate-180" />
           </Link>
         </Button>
-        <h1 className="text-2xl font-bold">{set.name}</h1>
-        <p className="mt-1 text-sm opacity-90">
-          {words.length} words · {mastery}% mastery
-        </p>
-        <div className="mt-4 h-2 w-full overflow-hidden rounded-full bg-primary-foreground/25">
-          <div
-            className="h-full rounded-full bg-accent transition-[width] duration-500"
-            style={{ width: `${Math.max(2, mastery)}%` }}
-          />
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label={t("common.delete")}
+          onClick={() => remove.mutate()}
+          disabled={remove.isPending}
+        >
+          <Trash2 className="size-5 text-destructive" />
+        </Button>
+      </div>
+
+      <h1 className="mt-2 text-2xl font-bold">{set.name}</h1>
+      <p className="mt-1 text-sm text-muted-foreground">
+        {t("set.pair", {
+          target: language(set.target_language).native,
+          native: language(set.native_language).native,
+        })}
+      </p>
+
+      <div className="card-surface mt-5 p-5">
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-semibold">{t("common.mastery")}</span>
+          <span className="text-lg font-bold text-primary">{mastery}%</span>
         </div>
-        <p className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold">
-          <CalendarClock className="size-3.5" /> {dueCount} reviews due today
+        <MasteryBar value={mastery} className="mt-3" />
+        <p className="mt-3 text-xs text-muted-foreground">
+          {t("sets.wordCount", { count: words.length })} · {t("set.dueToday", { count: dueCount })}
         </p>
       </div>
 
-      <h2 className="mt-7 mb-3 text-lg font-bold">Your Words</h2>
-      <ul className="space-y-2">
-        {words.map((word, index) => (
-          <li key={word.id} className="animate-rise" style={{ animationDelay: `${index * 50}ms` }}>
-            <Link
-              to="/sets/$setId/words/$wordId"
-              params={{ setId, wordId: word.id }}
-              className="card-surface flex items-center gap-3 p-4"
-            >
-              <div className="min-w-0 flex-1">
-                <p className="truncate font-semibold">{word.text}</p>
-                <MasteryBar value={wordMastery(word.id)} className="mt-2 h-1.5" />
-              </div>
-              <MasteryPill mastery={wordMastery(word.id)} />
-              <ChevronRight className="size-4 text-muted-foreground" />
-            </Link>
-          </li>
-        ))}
-      </ul>
+      <Button asChild size="lg" className="mt-4 w-full rounded-2xl">
+        <Link to="/practice" search={{ set: setId }}>
+          <Play className="size-4" /> {t("set.practice")}
+        </Link>
+      </Button>
 
-      <div className="sticky bottom-24 mt-8">
-        <Button asChild size="lg" className="w-full rounded-2xl shadow-glow">
-          <Link to="/practice" search={{ set: setId }}>
-            Practice This Set
-          </Link>
-        </Button>
-      </div>
+      <h2 className="mt-7 mb-3 text-lg font-bold">{t("set.words")}</h2>
+      <ul className="space-y-2.5">
+        {words.map((word) => {
+          const wordItems = items.filter((i) => i.word_id === word.id);
+          const wordMastery =
+            wordItems.length === 0
+              ? 0
+              : Math.round(
+                  wordItems.reduce((sum, i) => sum + Number(i.mastery), 0) / wordItems.length,
+                );
+          const attempts = wordItems.reduce((sum, i) => sum + i.attempts, 0);
+          return (
+            <li key={word.id}>
+              <Link
+                to="/sets/$setId/words/$wordId"
+                params={{ setId, wordId: word.id }}
+                className="card-surface flex items-center gap-3 p-4"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-bold" lang={set.target_language}>
+                    {word.text}
+                  </p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {word.translation ?? word.meaning}
+                  </p>
+                  <MasteryBar value={wordMastery} className="mt-2 h-1.5" />
+                </div>
+                <div className="flex flex-col items-end gap-1">
+                  <MasteryPill mastery={wordMastery} />
+                  <span className="text-[0.68rem] text-muted-foreground">
+                    {attempts} · {wordMastery}%
+                  </span>
+                </div>
+                <ChevronRight className="size-4 text-muted-foreground rtl:rotate-180" />
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
     </AppShell>
   );
 }

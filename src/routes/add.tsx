@@ -1,197 +1,169 @@
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { Check, Loader2, Plus, Sparkles, X } from "lucide-react";
+import { Loader2, Plus, Sparkles, X } from "lucide-react";
 import { useState } from "react";
-import { toast } from "sonner";
 
-import { AppShell, PageTitle } from "@/components/verba/AppShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useDeviceId } from "@/hooks/use-device-id";
+import { AppShell, PageTitle } from "@/components/verba/AppShell";
+import { useLearner } from "@/components/verba/AppGate";
+import { useI18n } from "@/lib/i18n";
 import { createSet } from "@/lib/verba/api";
+
+const MIN_WORDS = 4;
 
 export const Route = createFileRoute("/add")({
   head: () => ({
     meta: [
-      { title: "Create a New Word Set — Verba" },
+      { title: "New Word Set — LingoFlow" },
       {
         name: "description",
         content:
-          "Enter 4 or more words and Verba builds sentences, listening, writing and speaking practice around them.",
+          "Add at least four words and LingoFlow writes natural sentences, translations and exercises for them.",
       },
-      { property: "og:title", content: "Create a New Word Set — Verba" },
+      { property: "og:title", content: "New Word Set — LingoFlow" },
       {
         property: "og:description",
-        content: "Add your own words and turn them into real sentence practice.",
+        content: "Your words become sentences, listening, writing, speaking and recall practice.",
       },
     ],
   }),
   component: AddPage,
 });
 
-const MINIMUM = 4;
-
 function AddPage() {
-  const deviceId = useDeviceId();
+  const { deviceId, learner } = useLearner();
+  const { t, native, target } = useI18n();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+
   const [name, setName] = useState("");
   const [draft, setDraft] = useState("");
   const [words, setWords] = useState<string[]>([]);
-  const [editingIndex, setEditingIndex] = useState<number | null>(null);
-
-  const addWord = () => {
-    const cleaned = draft.trim().replace(/\s+/g, " ");
-    if (!cleaned) return;
-    if (editingIndex !== null) {
-      setWords((prev) => prev.map((w, i) => (i === editingIndex ? cleaned : w)));
-      setEditingIndex(null);
-    } else if (words.some((w) => w.toLowerCase() === cleaned.toLowerCase())) {
-      toast.info("That word is already in the set");
-    } else {
-      setWords((prev) => [...prev, cleaned]);
-    }
-    setDraft("");
-  };
+  const [notice, setNotice] = useState<string | null>(null);
 
   const create = useMutation({
-    mutationFn: () => createSet(deviceId as string, name.trim(), words),
-    onSuccess: (setId) => {
-      toast.success("Your set is ready");
-      navigate({ to: "/sets/$setId", params: { setId } });
+    mutationFn: () =>
+      createSet({
+        deviceId,
+        name: name.trim() || target.native,
+        words,
+        targetLanguage: learner.learning_language,
+        nativeLanguage: learner.native_language,
+        targetLanguageName: target.english,
+        nativeLanguageName: native.english,
+      }),
+    onSuccess: async (setId) => {
+      await queryClient.invalidateQueries({ queryKey: ["sets", deviceId] });
+      await queryClient.invalidateQueries({ queryKey: ["due", deviceId] });
+      void navigate({ to: "/sets/$setId", params: { setId } });
     },
-    onError: () => toast.error("Could not create the set. Please try again."),
   });
 
-  const canCreate =
-    Boolean(deviceId) && name.trim().length > 0 && words.length >= MINIMUM && !create.isPending;
+  const addWord = () => {
+    const value = draft.trim();
+    if (!value) return;
+    if (words.some((w) => w.toLowerCase() === value.toLowerCase())) {
+      setNotice(t("add.duplicate"));
+      return;
+    }
+    setWords((list) => [...list, value]);
+    setDraft("");
+    setNotice(null);
+  };
 
   if (create.isPending) {
     return (
-      <AppShell>
-        <div className="card-surface animate-rise mt-16 flex flex-col items-center p-10 text-center">
-          <Loader2 className="size-9 animate-spin text-primary" />
-          <h2 className="mt-5 text-lg font-bold">Preparing your learning experience...</h2>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Building sentences, listening, writing and speaking practice for your {words.length}{" "}
-            words.
-          </p>
-        </div>
-      </AppShell>
+      <div className="mx-auto flex min-h-screen max-w-md flex-col items-center justify-center px-6 text-center">
+        <span className="bg-hero-gradient flex size-20 items-center justify-center rounded-3xl text-primary-foreground shadow-glow">
+          <Sparkles className="size-9" />
+        </span>
+        <h1 className="mt-6 text-xl font-bold">{t("add.generating")}</h1>
+        <p className="mt-2 text-sm text-muted-foreground">{t("add.generatingBody")}</p>
+        <Loader2 className="mt-6 size-6 animate-spin text-primary" />
+      </div>
     );
   }
 
   return (
     <AppShell>
-      <PageTitle
-        title="Create a New Word Set"
-        subtitle="Your words, your set. Verba builds the sentences around them."
+      <PageTitle title={t("add.title")} subtitle={t("add.subtitle")} />
+
+      <label className="block text-sm font-semibold" htmlFor="set-name">
+        {t("add.nameLabel")}
+      </label>
+      <Input
+        id="set-name"
+        value={name}
+        onChange={(event) => setName(event.target.value)}
+        placeholder={t("add.namePlaceholder")}
+        className="mt-2 h-12 rounded-2xl"
       />
 
-      <div className="card-surface animate-rise space-y-3 p-5">
-        <label htmlFor="set-name" className="text-sm font-semibold">
-          Set name
-        </label>
+      <label className="mt-5 block text-sm font-semibold" htmlFor="set-word">
+        {t("add.wordsLabel")}
+      </label>
+      <div className="mt-2 flex gap-2">
         <Input
-          id="set-name"
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-          placeholder="Personal Growth"
-          className="h-12 rounded-xl text-base"
-        />
-      </div>
-
-      <div className="card-surface animate-rise mt-4 space-y-4 p-5">
-        <div className="flex items-center justify-between">
-          <label htmlFor="word-input" className="text-sm font-semibold">
-            Add your words
-          </label>
-          <span
-            className={
-              words.length >= MINIMUM
-                ? "text-xs font-bold text-success"
-                : "text-xs font-bold text-muted-foreground"
+          id="set-word"
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              addWord();
             }
-          >
-            {words.length} / {MINIMUM} minimum
-          </span>
-        </div>
-
-        <div className="flex gap-2">
-          <Input
-            id="word-input"
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault();
-                addWord();
-              }
-            }}
-            placeholder="improve"
-            className="h-12 rounded-xl text-base"
-          />
-          <Button
-            type="button"
-            onClick={addWord}
-            size="icon"
-            className="size-12 shrink-0 rounded-xl"
-            aria-label={editingIndex === null ? "Add word" : "Save word"}
-          >
-            {editingIndex === null ? <Plus className="size-5" /> : <Check className="size-5" />}
-          </Button>
-        </div>
-
-        {words.length > 0 ? (
-          <ul className="flex flex-wrap gap-2">
-            {words.map((word, index) => (
-              <li key={`${word}-${index}`}>
-                <span className="inline-flex items-center gap-1 rounded-full bg-primary-soft py-1.5 pr-1.5 pl-3 text-sm font-semibold text-primary-deep">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setDraft(word);
-                      setEditingIndex(index);
-                    }}
-                    className="max-w-40 truncate"
-                  >
-                    {word}
-                  </button>
-                  <button
-                    type="button"
-                    aria-label={`Remove ${word}`}
-                    onClick={() => setWords((prev) => prev.filter((_, i) => i !== index))}
-                    className="flex size-6 items-center justify-center rounded-full bg-card/70"
-                  >
-                    <X className="size-3.5" />
-                  </button>
-                </span>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="text-sm text-muted-foreground">
-            Tip: enter words you actually want to use, like{" "}
-            <span className="font-semibold text-foreground">improve, achieve, effort</span>.
-          </p>
-        )}
+          }}
+          placeholder={t("add.wordPlaceholder")}
+          lang={learner.learning_language}
+          className="h-12 rounded-2xl"
+        />
+        <Button
+          onClick={addWord}
+          aria-label={t("add.addWord")}
+          className="size-12 shrink-0 rounded-2xl"
+        >
+          <Plus className="size-5" />
+        </Button>
       </div>
-
-      <p className="mt-4 flex items-start gap-2 text-xs text-muted-foreground">
-        <Sparkles className="mt-0.5 size-3.5 shrink-0 text-accent" />
-        Each word gets sentences, variations and separate tracking for writing, speaking and recall.
+      <p className="mt-2 text-xs text-muted-foreground">
+        {t("add.count", { count: words.length, min: MIN_WORDS })}
       </p>
+      {notice ? <p className="mt-1 text-xs font-semibold text-destructive">{notice}</p> : null}
+
+      <ul className="mt-4 flex flex-wrap gap-2">
+        {words.map((word) => (
+          <li key={word}>
+            <button
+              type="button"
+              onClick={() => setWords((list) => list.filter((w) => w !== word))}
+              aria-label={t("add.remove", { word })}
+              className="flex items-center gap-1.5 rounded-full bg-primary-soft px-3 py-2 text-sm font-semibold text-primary-deep"
+            >
+              <span lang={learner.learning_language}>{word}</span>
+              <X className="size-3.5" />
+            </button>
+          </li>
+        ))}
+      </ul>
+
+      {create.isError ? (
+        <p className="mt-4 text-sm font-semibold text-destructive" role="alert">
+          {t("add.failed")}
+        </p>
+      ) : null}
 
       <Button
         size="lg"
-        className="mt-5 w-full rounded-2xl"
-        disabled={!canCreate}
+        className="mt-6 w-full rounded-2xl"
+        disabled={words.length < MIN_WORDS}
         onClick={() => create.mutate()}
       >
-        Create Set
+        <Sparkles className="size-4" /> {t("add.create")}
       </Button>
-      {words.length < MINIMUM ? (
+      {words.length < MIN_WORDS ? (
         <p className="mt-2 text-center text-xs text-muted-foreground">
-          Add at least {MINIMUM} words to continue.
+          {t("add.needMore", { min: MIN_WORDS })}
         </p>
       ) : null}
     </AppShell>
