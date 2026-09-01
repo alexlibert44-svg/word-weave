@@ -285,6 +285,7 @@ export type Database = {
       }
       words: {
         Row: {
+          alternative_parts_of_speech: string[]
           created_at: string
           id: string
           meaning: string | null
@@ -296,6 +297,7 @@ export type Database = {
           translation: string | null
         }
         Insert: {
+          alternative_parts_of_speech?: string[]
           created_at?: string
           id?: string
           meaning?: string | null
@@ -307,6 +309,7 @@ export type Database = {
           translation?: string | null
         }
         Update: {
+          alternative_parts_of_speech?: string[]
           created_at?: string
           id?: string
           meaning?: string | null
