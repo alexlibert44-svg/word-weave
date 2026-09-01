@@ -26,6 +26,8 @@ const GeneratedWord = z.object({
   translation: z.string().min(1),
   pronunciation: z.string().default(""),
   part_of_speech: z.string().default(""),
+  /** Other genuine grammatical uses of the same word, e.g. "light" as verb. */
+  alternative_parts_of_speech: z.array(z.string().min(1)).default([]),
   sentences: z.array(GeneratedSentence).min(1),
 });
 
@@ -52,7 +54,8 @@ Rules:
   3. a different grammatical form, variation_index 2 — use one of: "past", "future", "negative", "question", "plural", "comparative" (choose what fits the word).
   4. another different grammatical form, variation_index 3 — a different label from #3.
 - "pronunciation" is a short readable phonetic hint for the target-language word.
-- "part_of_speech" is one lowercase English word: noun, verb, adjective, adverb, phrase.
+- "part_of_speech" is the word's PRIMARY grammatical class for the learning context, chosen from exactly this list (lowercase English): noun, verb, adjective, adverb, pronoun, preposition, conjunction, determiner, expression, other.
+- "alternative_parts_of_speech" lists other genuine classes of the same word from the same list (e.g. "light" -> ["verb","adjective"]). Use an empty array when the word has only one real class. Never repeat the primary class.
 Return JSON only, no prose, no markdown fences.`;
 
 export const generateSetContent = createServerFn({ method: "POST" })
@@ -66,7 +69,7 @@ NATIVE language: ${data.nativeLanguage}
 Words (given by the learner, may be written in either language — always treat them as vocabulary to learn in ${data.targetLanguage}): ${data.words.join(", ")}
 
 Return this exact JSON shape:
-{"words":[{"word":"<the word exactly as given>","target_word":"<the word in ${data.targetLanguage}>","translation":"<meaning in ${data.nativeLanguage}>","pronunciation":"","part_of_speech":"","sentences":[{"text":"","translation":"","form":"base","variation_index":0}]}]}`;
+{"words":[{"word":"<the word exactly as given>","target_word":"<the word in ${data.targetLanguage}>","translation":"<meaning in ${data.nativeLanguage}>","pronunciation":"","part_of_speech":"","alternative_parts_of_speech":[],"sentences":[{"text":"","translation":"","form":"base","variation_index":0}]}]}`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
