@@ -257,25 +257,73 @@ export async function getWord(wordId: string): Promise<{
 
 /* -------------------------------- sessions --------------------------------- */
 
+/** Review status buckets, all derived from real stored performance. */
+export type ReviewStatus = "due" | "new" | "learning" | "weak" | "strong" | "mastered";
+
+export interface ReviewFilters {
+  setId?: string | null;
+  status?: ReviewStatus | null;
+  /** Primary part of speech of the word, e.g. "verb". */
+  pos?: string | null;
+  skill?: Skill | null;
+}
+
+export function matchesStatus(item: LearningItem, status: ReviewStatus): boolean {
+  const mastery = Number(item.mastery);
+  const errorRate = item.attempts > 0 ? item.mistakes / item.attempts : 0;
+  switch (status) {
+    case "due":
+      return isDue(item);
+    case "new":
+      return item.attempts === 0;
+    case "learning":
+      return item.attempts > 0 && mastery < 60;
+    case "weak":
+      return item.attempts > 0 && (errorRate >= 0.34 || mastery < 35);
+    case "strong":
+      return mastery >= 60 && mastery < 85;
+    case "mastered":
+      return mastery >= 85;
+  }
+}
+
 /**
  * Builds a session queue from real stored performance.
- * `setId` omitted => global review queue (weakest & most overdue first).
+ * With no filters this is the global review queue (weakest & most overdue first).
  */
 export async function buildQueue(
   deviceId: string,
-  setId: string | null,
+  filters: ReviewFilters | string | null = null,
   limit = 10,
 ): Promise<Exercise[]> {
+  const f: ReviewFilters = typeof filters === "string" ? { setId: filters } : (filters ?? {});
   let query = supabase.from("learning_items").select("*").eq("device_id", deviceId);
-  if (setId) query = query.eq("set_id", setId);
+  if (f.setId) query = query.eq("set_id", f.setId);
+  if (f.skill) query = query.eq("skill", f.skill);
   const { data: rawItems, error } = await query;
   if (error) throw error;
 
-  const items = (rawItems ?? []) as LearningItem[];
+  let items = (rawItems ?? []) as LearningItem[];
   if (items.length === 0) return [];
 
-  const due = items.filter((i) => isDue(i));
-  const pool = (due.length > 0 ? due : setId ? items : []).slice();
+  if (f.pos) {
+    const { data: posWords } = await supabase
+      .from("words")
+      .select("id")
+      .eq("part_of_speech", f.pos);
+    const allowed = new Set((posWords ?? []).map((w) => w.id));
+    items = items.filter((i) => allowed.has(i.word_id));
+  }
+
+  const explicit = Boolean(f.setId || f.skill || f.pos || (f.status && f.status !== "due"));
+  let pool: LearningItem[];
+  if (f.status) {
+    pool = items.filter((i) => matchesStatus(i, f.status as ReviewStatus));
+  } else {
+    const due = items.filter((i) => isDue(i));
+    pool = due.length > 0 ? due : explicit ? items : [];
+  }
+  pool = pool.slice();
   pool.sort((a, b) => priority(b) - priority(a));
   const selected = pool.slice(0, limit);
   if (selected.length === 0) return [];
