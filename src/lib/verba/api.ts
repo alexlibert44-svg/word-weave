@@ -403,6 +403,63 @@ export async function getDueBreakdown(deviceId: string): Promise<DueBreakdown> {
   };
 }
 
+export interface ReviewOverview extends DueBreakdown {
+  byStatus: Record<ReviewStatus, number>;
+  /** Counts keyed by the word's stored primary part of speech. */
+  byPos: Record<string, number>;
+  bySet: { id: string; name: string; due: number; total: number }[];
+}
+
+const STATUSES: ReviewStatus[] = ["due", "new", "learning", "weak", "strong", "mastered"];
+
+/** Everything the review dashboard shows, computed from stored review data. */
+export async function getReviewOverview(deviceId: string): Promise<ReviewOverview> {
+  const [{ data: rawItems, error }, { data: sets }] = await Promise.all([
+    supabase.from("learning_items").select("*").eq("device_id", deviceId),
+    supabase.from("word_sets").select("id, name").eq("device_id", deviceId),
+  ]);
+  if (error) throw error;
+
+  const items = (rawItems ?? []) as LearningItem[];
+  const wordIds = [...new Set(items.map((i) => i.word_id))];
+  const { data: words } = wordIds.length
+    ? await supabase.from("words").select("id, part_of_speech").in("id", wordIds)
+    : { data: [] as { id: string; part_of_speech: string | null }[] };
+  const posByWord = new Map((words ?? []).map((w) => [w.id, w.part_of_speech]));
+
+  const bySkill: Partial<Record<Skill, number>> = {};
+  const byPos: Record<string, number> = {};
+  const byStatus = Object.fromEntries(STATUSES.map((s) => [s, 0])) as Record<ReviewStatus, number>;
+  let total = 0;
+  let nextReviewAt: string | null = null;
+
+  for (const item of items) {
+    for (const status of STATUSES) if (matchesStatus(item, status)) byStatus[status] += 1;
+    if (isDue(item)) {
+      total += 1;
+      bySkill[item.skill] = (bySkill[item.skill] ?? 0) + 1;
+      const pos = posByWord.get(item.word_id);
+      if (pos) byPos[pos] = (byPos[pos] ?? 0) + 1;
+    } else if (!nextReviewAt || item.next_review_at < nextReviewAt) {
+      nextReviewAt = item.next_review_at;
+    }
+  }
+
+  const bySet = (sets ?? []).map((set) => {
+    const setItems = items.filter((i) => i.set_id === set.id);
+    return {
+      id: set.id as string,
+      name: set.name as string,
+      due: setItems.filter((i) => isDue(i)).length,
+      total: setItems.length,
+    };
+  });
+
+  return { total, bySkill, nextReviewAt, byStatus, byPos, bySet };
+}
+
+
+
 /** Persists one real attempt and re-schedules the item. */
 export async function recordAttempt(
   deviceId: string,
