@@ -15,7 +15,7 @@ const str = (value: unknown) => (typeof value === "string" && value ? value : un
 export const Route = createFileRoute("/practice")({
   validateSearch: (
     search: Record<string, unknown>,
-  ): { set?: string; status?: ReviewStatus; pos?: string; skill?: Skill } => ({
+  ): { set?: string | undefined; status?: ReviewStatus | undefined; pos?: string | undefined; skill?: Skill | undefined } => ({
     ...(str(search["set"]) ? { set: str(search["set"]) as string } : {}),
     ...(str(search["status"]) ? { status: str(search["status"]) as ReviewStatus } : {}),
     ...(str(search["pos"]) ? { pos: str(search["pos"]) as string } : {}),

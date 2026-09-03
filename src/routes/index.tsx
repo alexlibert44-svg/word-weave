@@ -91,7 +91,7 @@ function Home() {
           size="lg"
           className="mt-5 w-full rounded-2xl bg-accent text-accent-foreground hover:bg-accent/90"
         >
-          <Link to="/practice" search={{ set: undefined }}>
+          <Link to="/practice" search={{}}>
             {t("home.startReview")}
             <ArrowRight className="size-4 rtl:rotate-180" />
           </Link>

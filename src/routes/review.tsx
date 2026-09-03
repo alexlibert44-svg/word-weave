@@ -126,9 +126,9 @@ function ReviewPage() {
               <Link
                 to="/practice"
                 search={{
-                  set: setId ?? undefined,
-                  status: status ?? undefined,
-                  pos: pos ?? undefined,
+                  ...(setId ? { set: setId } : {}),
+                  ...(status ? { status } : {}),
+                  ...(pos ? { pos } : {}),
                 }}
               >
                 <Play className="size-4" />{" "}
