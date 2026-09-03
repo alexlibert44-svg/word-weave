@@ -125,10 +125,20 @@ function SetDetail() {
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-bold" lang={set.target_language}>
                     {word.text}
+                    {word.pronunciation ? (
+                      <span className="ms-2 text-xs font-normal text-muted-foreground">
+                        {word.pronunciation}
+                      </span>
+                    ) : null}
                   </p>
                   <p className="truncate text-xs text-muted-foreground">
                     {word.translation ?? word.meaning}
                   </p>
+                  {word.part_of_speech ? (
+                    <span className="mt-1 inline-block rounded-full bg-primary-soft px-2 py-0.5 text-[0.65rem] font-semibold text-primary-deep">
+                      {t(`pos.${word.part_of_speech}` as never)}
+                    </span>
+                  ) : null}
                   <MasteryBar value={wordMastery} className="mt-2 h-1.5" />
                 </div>
                 <div className="flex flex-col items-end gap-1">
