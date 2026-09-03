@@ -18,6 +18,7 @@ import { MasteryBar } from "@/components/verba/MasteryPill";
 import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { logSession, recordAttempt } from "@/lib/verba/api";
+import { posLabel } from "@/lib/verba/pos";
 import { speak } from "@/lib/verba/speech";
 import { normalize, similarity } from "@/lib/verba/srs";
 import type { Exercise, LearningItem, Sentence, Skill, Word } from "@/lib/verba/types";
@@ -330,7 +331,14 @@ function RecognitionStep({
           {word.translation ?? word.meaning}
         </p>
         {word.part_of_speech ? (
-          <p className="mt-1 text-xs text-muted-foreground">{word.part_of_speech}</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {posLabel(t as never, word.part_of_speech)}
+            {word.alternative_parts_of_speech?.length
+              ? ` · ${word.alternative_parts_of_speech
+                  .map((alt) => posLabel(t as never, alt))
+                  .join(", ")}`
+              : ""}
+          </p>
         ) : null}
         {sentence ? (
           <div className="mt-5 border-t border-border pt-4">
@@ -506,12 +514,25 @@ function WriteStep({
     : { prompt: word.translation ?? word.meaning ?? word.text, answer: word.text };
   const [value, setValue] = useState("");
   const [score, setScore] = useState<number | null>(null);
+  const [retry, setRetry] = useState(false);
+  const [tries, setTries] = useState(0);
 
   const check = () => {
     const clean = value.trim().replace(/\s+/g, " ");
     const exact = normalize(clean) === normalize(answer);
-    setScore(exact ? 1 : similarity(normalize(clean), normalize(answer)));
+    const result = exact ? 1 : similarity(normalize(clean), normalize(answer));
+    const attemptCount = tries + 1;
+    setTries(attemptCount);
+    // One honest retry before the answer is revealed; the lower of the two
+    // scores is what gets stored, so a retry never inflates mastery.
+    if (result < 0.9 && attemptCount === 1) {
+      setRetry(true);
+      return;
+    }
+    setRetry(false);
+    setScore(attemptCount > 1 && result >= 0.9 ? Math.min(result, 0.7) : result);
   };
+
 
   return (
     <div className="flex flex-1 flex-col">
@@ -540,13 +561,17 @@ function WriteStep({
         }}
       />
 
+      {retry ? (
+        <p className="mt-4 rounded-2xl bg-accent/15 px-4 py-3 text-sm font-semibold" role="status">
+          {t("train.tryAgain")}
+        </p>
+      ) : null}
+
       {score !== null ? (
         <div
           className={cn(
             "mt-4 rounded-2xl px-4 py-3 text-sm font-semibold",
-            score >= 0.9
-              ? "bg-success-soft text-success"
-              : "bg-destructive/10 text-destructive",
+            score >= 0.9 ? "bg-success-soft text-success" : "bg-destructive/10 text-destructive",
           )}
           role="status"
         >
@@ -554,6 +579,7 @@ function WriteStep({
           {score >= 0.9 ? null : <span className="font-bold">{answer}</span>}
         </div>
       ) : null}
+
 
       {score === null ? (
         <Button

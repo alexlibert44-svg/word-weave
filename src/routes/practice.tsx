@@ -7,11 +7,19 @@ import { useLearner } from "@/components/verba/AppGate";
 import { Session } from "@/components/verba/Session";
 import { useI18n } from "@/lib/i18n";
 import { speechLocale } from "@/lib/i18n/languages";
-import { buildQueue, getSet } from "@/lib/verba/api";
+import { buildQueue, getSet, type ReviewStatus } from "@/lib/verba/api";
+import type { Skill } from "@/lib/verba/types";
+
+const str = (value: unknown) => (typeof value === "string" && value ? value : undefined);
 
 export const Route = createFileRoute("/practice")({
-  validateSearch: (search: Record<string, unknown>) => ({
-    set: typeof search["set"] === "string" ? (search["set"] as string) : undefined,
+  validateSearch: (
+    search: Record<string, unknown>,
+  ): { set?: string | undefined; status?: ReviewStatus | undefined; pos?: string | undefined; skill?: Skill | undefined } => ({
+    ...(str(search["set"]) ? { set: str(search["set"]) as string } : {}),
+    ...(str(search["status"]) ? { status: str(search["status"]) as ReviewStatus } : {}),
+    ...(str(search["pos"]) ? { pos: str(search["pos"]) as string } : {}),
+    ...(str(search["skill"]) ? { skill: str(search["skill"]) as Skill } : {}),
   }),
   head: () => ({
     meta: [
@@ -43,14 +51,25 @@ export const Route = createFileRoute("/practice")({
 });
 
 function PracticePage() {
-  const { set: setId } = Route.useSearch();
+  const { set: setId, status, pos, skill } = Route.useSearch();
   const { deviceId } = useLearner();
   const { t, targetSpeech } = useI18n();
   const queryClient = useQueryClient();
 
-  const { data: exercises, isPending } = useQuery({
-    queryKey: ["queue", deviceId, setId ?? "review"],
-    queryFn: () => buildQueue(deviceId, setId ?? null),
+  const filters = {
+    setId: setId ?? null,
+    status: status ?? null,
+    pos: pos ?? null,
+    skill: skill ?? null,
+  };
+
+  const {
+    data: exercises,
+    isPending,
+    refetch,
+  } = useQuery({
+    queryKey: ["queue", deviceId, setId ?? "review", status ?? "", pos ?? "", skill ?? ""],
+    queryFn: () => buildQueue(deviceId, filters),
     staleTime: Infinity,
     gcTime: 0,
   });
@@ -96,7 +115,11 @@ function PracticePage() {
         void queryClient.invalidateQueries({ queryKey: ["sets", deviceId] });
         void queryClient.invalidateQueries({ queryKey: ["daily", deviceId] });
         void queryClient.invalidateQueries({ queryKey: ["learner", deviceId] });
+        void queryClient.invalidateQueries({ queryKey: ["review", deviceId] });
         if (setId) void queryClient.invalidateQueries({ queryKey: ["set", setId] });
+      }}
+      onRestart={() => {
+        void refetch();
       }}
     />
   );

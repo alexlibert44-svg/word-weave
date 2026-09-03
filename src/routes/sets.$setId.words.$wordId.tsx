@@ -9,6 +9,7 @@ import { MasteryBar, MasteryPill } from "@/components/verba/MasteryPill";
 import { useI18n } from "@/lib/i18n";
 import { speechLocale } from "@/lib/i18n/languages";
 import { getWord } from "@/lib/verba/api";
+import { posLabel } from "@/lib/verba/pos";
 import { speak } from "@/lib/verba/speech";
 import { SKILL_KEY } from "@/lib/verba/types";
 
@@ -70,7 +71,12 @@ function WordDetail() {
         ) : null}
         {word.part_of_speech ? (
           <p className="mt-2 text-xs font-semibold tracking-wide text-primary uppercase">
-            {word.part_of_speech}
+            {posLabel(t as never, word.part_of_speech)}
+            {word.alternative_parts_of_speech?.length
+              ? ` · ${word.alternative_parts_of_speech
+                  .map((alt) => posLabel(t as never, alt))
+                  .join(", ")}`
+              : ""}
           </p>
         ) : null}
         <Button

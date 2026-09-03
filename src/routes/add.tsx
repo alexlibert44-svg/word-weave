@@ -42,12 +42,20 @@ function AddPage() {
   const [words, setWords] = useState<string[]>([]);
   const [notice, setNotice] = useState<string | null>(null);
 
+  // The typed-but-not-yet-added word still counts: otherwise the button looks
+  // disabled after the learner types their fourth word.
+  const pending = draft.trim();
+  const allWords =
+    pending && !words.some((w) => w.toLowerCase() === pending.toLowerCase())
+      ? [...words, pending]
+      : words;
+
   const create = useMutation({
     mutationFn: () =>
       createSet({
         deviceId,
         name: name.trim() || target.native,
-        words,
+        words: allWords,
         targetLanguage: learner.learning_language,
         nativeLanguage: learner.native_language,
         targetLanguageName: target.english,
@@ -127,7 +135,7 @@ function AddPage() {
         </Button>
       </div>
       <p className="mt-2 text-xs text-muted-foreground">
-        {t("add.count", { count: words.length, min: MIN_WORDS })}
+        {t("add.count", { count: allWords.length, min: MIN_WORDS })}
       </p>
       {notice ? <p className="mt-1 text-xs font-semibold text-destructive">{notice}</p> : null}
 
@@ -149,19 +157,28 @@ function AddPage() {
 
       {create.isError ? (
         <p className="mt-4 text-sm font-semibold text-destructive" role="alert">
-          {t("add.failed")}
+          {create.error instanceof Error && create.error.message
+            ? create.error.message
+            : t("add.failed")}
         </p>
       ) : null}
 
       <Button
         size="lg"
         className="mt-6 w-full rounded-2xl"
-        disabled={words.length < MIN_WORDS}
-        onClick={() => create.mutate()}
+        disabled={allWords.length < MIN_WORDS || create.isPending}
+        onClick={() => {
+          if (create.isPending) return;
+          if (pending) {
+            setWords(allWords);
+            setDraft("");
+          }
+          create.mutate();
+        }}
       >
         <Sparkles className="size-4" /> {t("add.create")}
       </Button>
-      {words.length < MIN_WORDS ? (
+      {allWords.length < MIN_WORDS ? (
         <p className="mt-2 text-center text-xs text-muted-foreground">
           {t("add.needMore", { min: MIN_WORDS })}
         </p>
