@@ -506,12 +506,25 @@ function WriteStep({
     : { prompt: word.translation ?? word.meaning ?? word.text, answer: word.text };
   const [value, setValue] = useState("");
   const [score, setScore] = useState<number | null>(null);
+  const [retry, setRetry] = useState(false);
+  const [tries, setTries] = useState(0);
 
   const check = () => {
     const clean = value.trim().replace(/\s+/g, " ");
     const exact = normalize(clean) === normalize(answer);
-    setScore(exact ? 1 : similarity(normalize(clean), normalize(answer)));
+    const result = exact ? 1 : similarity(normalize(clean), normalize(answer));
+    const attemptCount = tries + 1;
+    setTries(attemptCount);
+    // One honest retry before the answer is revealed; the lower of the two
+    // scores is what gets stored, so a retry never inflates mastery.
+    if (result < 0.9 && attemptCount === 1) {
+      setRetry(true);
+      return;
+    }
+    setRetry(false);
+    setScore(attemptCount > 1 && result >= 0.9 ? Math.min(result, 0.7) : result);
   };
+
 
   return (
     <div className="flex flex-1 flex-col">
