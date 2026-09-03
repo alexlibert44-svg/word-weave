@@ -553,13 +553,17 @@ function WriteStep({
         }}
       />
 
+      {retry ? (
+        <p className="mt-4 rounded-2xl bg-accent/15 px-4 py-3 text-sm font-semibold" role="status">
+          {t("train.tryAgain")}
+        </p>
+      ) : null}
+
       {score !== null ? (
         <div
           className={cn(
             "mt-4 rounded-2xl px-4 py-3 text-sm font-semibold",
-            score >= 0.9
-              ? "bg-success-soft text-success"
-              : "bg-destructive/10 text-destructive",
+            score >= 0.9 ? "bg-success-soft text-success" : "bg-destructive/10 text-destructive",
           )}
           role="status"
         >
@@ -567,6 +571,7 @@ function WriteStep({
           {score >= 0.9 ? null : <span className="font-bold">{answer}</span>}
         </div>
       ) : null}
+
 
       {score === null ? (
         <Button
