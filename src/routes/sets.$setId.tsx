@@ -5,6 +5,7 @@ import { ArrowLeft, ChevronRight, Play, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AppShell } from "@/components/verba/AppShell";
+import { posLabel } from "@/lib/verba/pos";
 import { MasteryBar, MasteryPill } from "@/components/verba/MasteryPill";
 import { useI18n } from "@/lib/i18n";
 import { language } from "@/lib/i18n/languages";
@@ -136,7 +137,7 @@ function SetDetail() {
                   </p>
                   {word.part_of_speech ? (
                     <span className="mt-1 inline-block rounded-full bg-primary-soft px-2 py-0.5 text-[0.65rem] font-semibold text-primary-deep">
-                      {t(`pos.${word.part_of_speech}` as never)}
+                      {posLabel(t as never, word.part_of_speech)}
                     </span>
                   ) : null}
                   <MasteryBar value={wordMastery} className="mt-2 h-1.5" />

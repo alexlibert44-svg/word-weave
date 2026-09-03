@@ -18,6 +18,7 @@ import { MasteryBar } from "@/components/verba/MasteryPill";
 import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { logSession, recordAttempt } from "@/lib/verba/api";
+import { posLabel } from "@/lib/verba/pos";
 import { speak } from "@/lib/verba/speech";
 import { normalize, similarity } from "@/lib/verba/srs";
 import type { Exercise, LearningItem, Sentence, Skill, Word } from "@/lib/verba/types";
@@ -330,7 +331,14 @@ function RecognitionStep({
           {word.translation ?? word.meaning}
         </p>
         {word.part_of_speech ? (
-          <p className="mt-1 text-xs text-muted-foreground">{word.part_of_speech}</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {posLabel(t as never, word.part_of_speech)}
+            {word.alternative_parts_of_speech?.length
+              ? ` · ${word.alternative_parts_of_speech
+                  .map((alt) => posLabel(t as never, alt))
+                  .join(", ")}`
+              : ""}
+          </p>
         ) : null}
         {sentence ? (
           <div className="mt-5 border-t border-border pt-4">

@@ -9,6 +9,7 @@ import { AppShell, PageTitle } from "@/components/verba/AppShell";
 import { useLearner } from "@/components/verba/AppGate";
 import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
+import { posLabel } from "@/lib/verba/pos";
 import { getReviewOverview, type ReviewStatus } from "@/lib/verba/api";
 import { SKILL_KEY, type Skill } from "@/lib/verba/types";
 
@@ -169,7 +170,7 @@ function ReviewPage() {
                     <Chip
                       key={key}
                       active={pos === key}
-                      label={t(`pos.${key}` as never)}
+                      label={posLabel(t as never, key)}
                       count={count}
                       onClick={() => setPos(pos === key ? null : key)}
                     />
