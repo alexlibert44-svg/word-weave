@@ -13,11 +13,13 @@ import type { Skill } from "@/lib/verba/types";
 const str = (value: unknown) => (typeof value === "string" && value ? value : undefined);
 
 export const Route = createFileRoute("/practice")({
-  validateSearch: (search: Record<string, unknown>) => ({
-    set: str(search["set"]),
-    status: str(search["status"]) as ReviewStatus | undefined,
-    pos: str(search["pos"]),
-    skill: str(search["skill"]) as Skill | undefined,
+  validateSearch: (
+    search: Record<string, unknown>,
+  ): { set?: string; status?: ReviewStatus; pos?: string; skill?: Skill } => ({
+    ...(str(search["set"]) ? { set: str(search["set"]) as string } : {}),
+    ...(str(search["status"]) ? { status: str(search["status"]) as ReviewStatus } : {}),
+    ...(str(search["pos"]) ? { pos: str(search["pos"]) as string } : {}),
+    ...(str(search["skill"]) ? { skill: str(search["skill"]) as Skill } : {}),
   }),
   head: () => ({
     meta: [
