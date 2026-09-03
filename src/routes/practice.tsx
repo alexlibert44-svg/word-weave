@@ -7,7 +7,8 @@ import { useLearner } from "@/components/verba/AppGate";
 import { Session } from "@/components/verba/Session";
 import { useI18n } from "@/lib/i18n";
 import { speechLocale } from "@/lib/i18n/languages";
-import { buildQueue, getSet } from "@/lib/verba/api";
+import { buildQueue, getSet, type ReviewStatus } from "@/lib/verba/api";
+import type { Skill } from "@/lib/verba/types";
 
 const str = (value: unknown) => (typeof value === "string" && value ? value : undefined);
 
@@ -112,7 +113,11 @@ function PracticePage() {
         void queryClient.invalidateQueries({ queryKey: ["sets", deviceId] });
         void queryClient.invalidateQueries({ queryKey: ["daily", deviceId] });
         void queryClient.invalidateQueries({ queryKey: ["learner", deviceId] });
+        void queryClient.invalidateQueries({ queryKey: ["review", deviceId] });
         if (setId) void queryClient.invalidateQueries({ queryKey: ["set", setId] });
+      }}
+      onRestart={() => {
+        void refetch();
       }}
     />
   );
