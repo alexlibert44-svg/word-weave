@@ -9,9 +9,14 @@ import { useI18n } from "@/lib/i18n";
 import { speechLocale } from "@/lib/i18n/languages";
 import { buildQueue, getSet } from "@/lib/verba/api";
 
+const str = (value: unknown) => (typeof value === "string" && value ? value : undefined);
+
 export const Route = createFileRoute("/practice")({
   validateSearch: (search: Record<string, unknown>) => ({
-    set: typeof search["set"] === "string" ? (search["set"] as string) : undefined,
+    set: str(search["set"]),
+    status: str(search["status"]) as ReviewStatus | undefined,
+    pos: str(search["pos"]),
+    skill: str(search["skill"]) as Skill | undefined,
   }),
   head: () => ({
     meta: [
