@@ -48,14 +48,25 @@ export const Route = createFileRoute("/practice")({
 });
 
 function PracticePage() {
-  const { set: setId } = Route.useSearch();
+  const { set: setId, status, pos, skill } = Route.useSearch();
   const { deviceId } = useLearner();
   const { t, targetSpeech } = useI18n();
   const queryClient = useQueryClient();
 
-  const { data: exercises, isPending } = useQuery({
-    queryKey: ["queue", deviceId, setId ?? "review"],
-    queryFn: () => buildQueue(deviceId, setId ?? null),
+  const filters = {
+    setId: setId ?? null,
+    status: status ?? null,
+    pos: pos ?? null,
+    skill: skill ?? null,
+  };
+
+  const {
+    data: exercises,
+    isPending,
+    refetch,
+  } = useQuery({
+    queryKey: ["queue", deviceId, setId ?? "review", status ?? "", pos ?? "", skill ?? ""],
+    queryFn: () => buildQueue(deviceId, filters),
     staleTime: Infinity,
     gcTime: 0,
   });
