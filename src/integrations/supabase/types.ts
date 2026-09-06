@@ -209,6 +209,53 @@ export type Database = {
           },
         ]
       }
+      pronunciation_attempts: {
+        Row: {
+          attempt_index: number
+          created_at: string
+          device_id: string
+          id: string
+          learning_item_id: string
+          matched_words: string[]
+          missed_words: string[]
+          score: number
+          target_text: string
+          transcript: string
+        }
+        Insert: {
+          attempt_index?: number
+          created_at?: string
+          device_id: string
+          id?: string
+          learning_item_id: string
+          matched_words?: string[]
+          missed_words?: string[]
+          score?: number
+          target_text: string
+          transcript?: string
+        }
+        Update: {
+          attempt_index?: number
+          created_at?: string
+          device_id?: string
+          id?: string
+          learning_item_id?: string
+          matched_words?: string[]
+          missed_words?: string[]
+          score?: number
+          target_text?: string
+          transcript?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pronunciation_attempts_learning_item_id_fkey"
+            columns: ["learning_item_id"]
+            isOneToOne: false
+            referencedRelation: "learning_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sentences: {
         Row: {
           created_at: string
@@ -218,6 +265,7 @@ export type Database = {
           text: string
           translation: string | null
           variation_index: number
+          word_hints: Json
           word_id: string
         }
         Insert: {
@@ -228,6 +276,7 @@ export type Database = {
           text: string
           translation?: string | null
           variation_index?: number
+          word_hints?: Json
           word_id: string
         }
         Update: {
@@ -238,6 +287,7 @@ export type Database = {
           text?: string
           translation?: string | null
           variation_index?: number
+          word_hints?: Json
           word_id?: string
         }
         Relationships: [
@@ -287,36 +337,42 @@ export type Database = {
         Row: {
           alternative_parts_of_speech: string[]
           created_at: string
+          difficulty: number | null
           id: string
           meaning: string | null
           part_of_speech: string | null
           position: number
           pronunciation: string | null
           set_id: string
+          tags: string[]
           text: string
           translation: string | null
         }
         Insert: {
           alternative_parts_of_speech?: string[]
           created_at?: string
+          difficulty?: number | null
           id?: string
           meaning?: string | null
           part_of_speech?: string | null
           position?: number
           pronunciation?: string | null
           set_id: string
+          tags?: string[]
           text: string
           translation?: string | null
         }
         Update: {
           alternative_parts_of_speech?: string[]
           created_at?: string
+          difficulty?: number | null
           id?: string
           meaning?: string | null
           part_of_speech?: string | null
           position?: number
           pronunciation?: string | null
           set_id?: string
+          tags?: string[]
           text?: string
           translation?: string | null
         }

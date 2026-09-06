@@ -11,11 +11,20 @@ import { z } from "zod";
  * surfaces the error instead of storing invented content.
  */
 
+const WordHint = z.object({
+  /** A chunk exactly as it appears in the NATIVE-language translation. */
+  native: z.string().min(1),
+  /** What that chunk corresponds to in the TARGET-language sentence. */
+  target: z.string().min(1),
+});
+
 const GeneratedSentence = z.object({
   text: z.string().min(1),
   translation: z.string().min(1),
   form: z.string().min(1),
   variation_index: z.number().int().min(0),
+  /** Word/phrase alignment between the translation and the target sentence. */
+  word_hints: z.array(WordHint).default([]),
 });
 
 const GeneratedWord = z.object({
@@ -28,6 +37,10 @@ const GeneratedWord = z.object({
   part_of_speech: z.string().default(""),
   /** Other genuine grammatical uses of the same word, e.g. "light" as verb. */
   alternative_parts_of_speech: z.array(z.string().min(1)).default([]),
+  /** 1 (very easy) .. 5 (advanced). */
+  difficulty: z.number().int().min(1).max(5).default(2),
+  /** Semantic metadata only — never used to move a word between sets. */
+  tags: z.array(z.string().min(1)).default([]),
   sentences: z.array(GeneratedSentence).min(1),
 });
 
@@ -56,6 +69,9 @@ Rules:
 - "pronunciation" is a short readable phonetic hint for the target-language word.
 - "part_of_speech" is the word's PRIMARY grammatical class for the learning context, chosen from exactly this list (lowercase English): noun, verb, adjective, adverb, pronoun, preposition, conjunction, determiner, expression, other.
 - "alternative_parts_of_speech" lists other genuine classes of the same word from the same list (e.g. "light" -> ["verb","adjective"]). Use an empty array when the word has only one real class. Never repeat the primary class.
+- "difficulty" is 1..5 for how hard the word is for a learner.
+- "tags" holds 1-3 lowercase English topic tags (metadata only).
+- "word_hints" aligns the NATIVE translation with the TARGET sentence, chunk by chunk, in the order the chunks appear in the translation. Each "native" value MUST be a substring copied verbatim from that sentence's "translation" (a single word, or a short phrase when the languages do not map one-to-one), and "target" is the matching word or phrase copied from "text". Cover every meaningful chunk of the translation; skip nothing important and never invent chunks that are not in the translation.
 Return JSON only, no prose, no markdown fences.`;
 
 export const generateSetContent = createServerFn({ method: "POST" })
@@ -69,7 +85,7 @@ NATIVE language: ${data.nativeLanguage}
 Words (given by the learner, may be written in either language — always treat them as vocabulary to learn in ${data.targetLanguage}): ${data.words.join(", ")}
 
 Return this exact JSON shape:
-{"words":[{"word":"<the word exactly as given>","target_word":"<the word in ${data.targetLanguage}>","translation":"<meaning in ${data.nativeLanguage}>","pronunciation":"","part_of_speech":"","alternative_parts_of_speech":[],"sentences":[{"text":"","translation":"","form":"base","variation_index":0}]}]}`;
+{"words":[{"word":"<the word exactly as given>","target_word":"<the word in ${data.targetLanguage}>","translation":"<meaning in ${data.nativeLanguage}>","pronunciation":"","part_of_speech":"","alternative_parts_of_speech":[],"difficulty":2,"tags":[],"sentences":[{"text":"","translation":"","form":"base","variation_index":0,"word_hints":[{"native":"","target":""}]}]}]}`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",

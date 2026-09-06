@@ -360,15 +360,17 @@ function RecognitionStep({
 
 /* --------------------------------- speak ---------------------------------- */
 
-type RecorderState = "idle" | "recording" | "recorded" | "denied";
+type RecorderState = "idle" | "recording" | "analyzing" | "scored" | "denied";
 
 function SpeakStep({
   unit,
   locale,
+  deviceId,
   onDone,
 }: {
   unit: WordUnit;
   locale: string;
+  deviceId: string;
   onDone: (score: number, note: string | null) => void;
 }) {
   const { t } = useI18n();
@@ -376,6 +378,10 @@ function SpeakStep({
   const target = sentence?.text ?? word.text;
   const [state, setState] = useState<RecorderState>("idle");
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [result, setResult] = useState<PronunciationResult | null>(null);
+  const [best, setBest] = useState(0);
+  const [tries, setTries] = useState(0);
+  const [error, setError] = useState<string | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
@@ -386,6 +392,47 @@ function SpeakStep({
     },
     [audioUrl],
   );
+
+  /** Sends the recording for real transcription-based scoring. */
+  const analyse = async (blob: Blob) => {
+    setState("analyzing");
+    setError(null);
+    const attemptIndex = tries + 1;
+    setTries(attemptIndex);
+    try {
+      const buffer = await blob.arrayBuffer();
+      let binary = "";
+      const bytes = new Uint8Array(buffer);
+      for (let i = 0; i < bytes.length; i += 0x8000) {
+        binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+      }
+      const analysis = await evaluatePronunciation({
+        data: {
+          audioBase64: btoa(binary),
+          mimeType: blob.type || "audio/webm",
+          target,
+          locale,
+        },
+      });
+      setResult(analysis);
+      setBest((value) => Math.max(value, analysis.score));
+      setState("scored");
+      const item = unit.items["speaking"] ?? unit.fallbackItem;
+      void recordPronunciation({
+        deviceId,
+        itemId: item.id,
+        target,
+        transcript: analysis.transcript,
+        score: analysis.score,
+        matched: analysis.matched,
+        missed: analysis.missed,
+        attemptIndex,
+      }).catch(() => undefined);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : t("train.pronFailed"));
+      setState("idle");
+    }
+  };
 
   const start = async () => {
     if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
@@ -403,11 +450,15 @@ function SpeakStep({
       recorder.onstop = () => {
         stream.getTracks().forEach((track) => track.stop());
         const blob = new Blob(chunks, { type: recorder.mimeType || "audio/webm" });
-        setAudioUrl(URL.createObjectURL(blob));
-        setState("recorded");
+        setAudioUrl((old) => {
+          if (old) URL.revokeObjectURL(old);
+          return URL.createObjectURL(blob);
+        });
+        void analyse(blob);
       };
       recorderRef.current = recorder;
       recorder.start();
+      setResult(null);
       setState("recording");
     } catch {
       setState("denied");
@@ -415,6 +466,7 @@ function SpeakStep({
   };
 
   const stop = () => recorderRef.current?.stop();
+  const passed = (result?.score ?? 0) >= 0.7;
 
   return (
     <div className="flex flex-1 flex-col">
@@ -444,12 +496,21 @@ function SpeakStep({
         ) : (
           <Button
             size="lg"
-            variant={state === "recorded" ? "secondary" : "default"}
+            variant={state === "scored" ? "secondary" : "default"}
             className="w-full rounded-2xl"
+            disabled={state === "analyzing"}
             onClick={() => void start()}
           >
-            <Mic className="size-4" />{" "}
-            {state === "recorded" ? t("train.recordAgain") : t("train.record")}
+            {state === "analyzing" ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Mic className="size-4" />
+            )}{" "}
+            {state === "analyzing"
+              ? t("train.analyzing")
+              : tries > 0
+                ? t("train.recordAgain")
+                : t("train.record")}
           </Button>
         )}
 
@@ -467,6 +528,46 @@ function SpeakStep({
           </div>
         ) : null}
 
+        {result ? (
+          <div
+            className={cn(
+              "card-surface p-4",
+              passed ? "bg-success-soft" : "bg-destructive/10",
+            )}
+            role="status"
+          >
+            <p className={cn("text-sm font-bold", passed ? "text-success" : "text-destructive")}>
+              {t("train.pronScore", { score: Math.round(result.score * 100) })}
+            </p>
+            {result.transcript ? (
+              <p className="mt-1 text-sm" lang={locale}>
+                {t("train.heard")}: {result.transcript}
+              </p>
+            ) : (
+              <p className="mt-1 text-sm">{t("train.heardNothing")}</p>
+            )}
+            {result.matched.length > 0 ? (
+              <p className="mt-2 text-xs font-semibold text-success">
+                {t("train.pronGood")}: {result.matched.join(" · ")}
+              </p>
+            ) : null}
+            {result.missed.length > 0 ? (
+              <p className="mt-1 text-xs font-semibold text-destructive">
+                {t("train.pronMissed")}: {result.missed.join(" · ")}
+              </p>
+            ) : null}
+            {!passed ? (
+              <p className="mt-2 text-xs font-semibold">{t("train.tryAgain")}</p>
+            ) : null}
+          </div>
+        ) : null}
+
+        {error ? (
+          <p className="text-sm font-semibold text-destructive" role="alert">
+            {error}
+          </p>
+        ) : null}
+
         {state === "denied" ? (
           <p className="text-sm font-semibold text-destructive" role="alert">
             {t("train.micDenied")}
@@ -475,22 +576,25 @@ function SpeakStep({
       </div>
 
       <div className="mt-auto space-y-2.5 pt-6">
-        <p className="text-center text-xs text-muted-foreground">{t("train.selfCheckNote")}</p>
-        <Button
-          size="lg"
-          className="w-full rounded-2xl"
-          onClick={() => onDone(0.9, `self:ok:${target}`)}
-        >
-          <Check className="size-4" /> {t("practice.speakingSelfOk")}
-        </Button>
-        <Button
-          size="lg"
-          variant="secondary"
-          className="w-full rounded-2xl"
-          onClick={() => onDone(0.4, `self:practice:${target}`)}
-        >
-          {t("practice.speakingSelfNo")}
-        </Button>
+        {state === "denied" ? (
+          <Button
+            size="lg"
+            variant="secondary"
+            className="w-full rounded-2xl"
+            onClick={() => onDone(0, "mic-denied")}
+          >
+            {t("common.skip")} <ArrowRight className="size-4 rtl:rotate-180" />
+          </Button>
+        ) : null}
+        {result && (passed || tries >= 2) ? (
+          <Button
+            size="lg"
+            className="w-full rounded-2xl"
+            onClick={() => onDone(best, result.transcript || "no-speech")}
+          >
+            {t("common.next")} <ArrowRight className="size-4 rtl:rotate-180" />
+          </Button>
+        ) : null}
       </div>
     </div>
   );

@@ -159,6 +159,8 @@ async function storeGenerated(deviceId: string, setId: string, generated: Genera
         pronunciation: g.pronunciation || null,
         part_of_speech: g.part_of_speech || null,
         alternative_parts_of_speech: g.alternative_parts_of_speech ?? [],
+        difficulty: g.difficulty ?? null,
+        tags: g.tags ?? [],
         position: index,
       })),
     )
@@ -174,6 +176,7 @@ async function storeGenerated(deviceId: string, setId: string, generated: Genera
       form: s.form,
       variation_index: s.variation_index,
       is_ai_generated: true,
+      word_hints: s.word_hints ?? [],
     }));
   });
 
@@ -459,6 +462,30 @@ export async function getReviewOverview(deviceId: string): Promise<ReviewOvervie
 }
 
 
+
+/** Persists one analysed pronunciation recording alongside the SRS attempt. */
+export async function recordPronunciation(input: {
+  deviceId: string;
+  itemId: string;
+  target: string;
+  transcript: string;
+  score: number;
+  matched: string[];
+  missed: string[];
+  attemptIndex: number;
+}): Promise<void> {
+  const { error } = await supabase.from("pronunciation_attempts").insert({
+    device_id: input.deviceId,
+    learning_item_id: input.itemId,
+    target_text: input.target,
+    transcript: input.transcript,
+    score: input.score,
+    matched_words: input.matched,
+    missed_words: input.missed,
+    attempt_index: input.attemptIndex,
+  });
+  if (error) throw error;
+}
 
 /** Persists one real attempt and re-schedules the item. */
 export async function recordAttempt(
