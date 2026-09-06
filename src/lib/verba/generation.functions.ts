@@ -37,6 +37,10 @@ const GeneratedWord = z.object({
   part_of_speech: z.string().default(""),
   /** Other genuine grammatical uses of the same word, e.g. "light" as verb. */
   alternative_parts_of_speech: z.array(z.string().min(1)).default([]),
+  /** 1 (very easy) .. 5 (advanced). */
+  difficulty: z.number().int().min(1).max(5).default(2),
+  /** Semantic metadata only — never used to move a word between sets. */
+  tags: z.array(z.string().min(1)).default([]),
   sentences: z.array(GeneratedSentence).min(1),
 });
 
