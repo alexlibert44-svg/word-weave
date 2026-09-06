@@ -463,6 +463,30 @@ export async function getReviewOverview(deviceId: string): Promise<ReviewOvervie
 
 
 
+/** Persists one analysed pronunciation recording alongside the SRS attempt. */
+export async function recordPronunciation(input: {
+  deviceId: string;
+  itemId: string;
+  target: string;
+  transcript: string;
+  score: number;
+  matched: string[];
+  missed: string[];
+  attemptIndex: number;
+}): Promise<void> {
+  const { error } = await supabase.from("pronunciation_attempts").insert({
+    device_id: input.deviceId,
+    learning_item_id: input.itemId,
+    target_text: input.target,
+    transcript: input.transcript,
+    score: input.score,
+    matched_words: input.matched,
+    missed_words: input.missed,
+    attempt_index: input.attemptIndex,
+  });
+  if (error) throw error;
+}
+
 /** Persists one real attempt and re-schedules the item. */
 export async function recordAttempt(
   deviceId: string,
