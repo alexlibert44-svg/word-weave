@@ -11,11 +11,20 @@ import { z } from "zod";
  * surfaces the error instead of storing invented content.
  */
 
+const WordHint = z.object({
+  /** A chunk exactly as it appears in the NATIVE-language translation. */
+  native: z.string().min(1),
+  /** What that chunk corresponds to in the TARGET-language sentence. */
+  target: z.string().min(1),
+});
+
 const GeneratedSentence = z.object({
   text: z.string().min(1),
   translation: z.string().min(1),
   form: z.string().min(1),
   variation_index: z.number().int().min(0),
+  /** Word/phrase alignment between the translation and the target sentence. */
+  word_hints: z.array(WordHint).default([]),
 });
 
 const GeneratedWord = z.object({
