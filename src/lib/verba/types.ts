@@ -34,6 +34,10 @@ export interface Word {
   part_of_speech: string | null;
   /** Other genuine grammatical uses of the same word. */
   alternative_parts_of_speech?: string[] | null;
+  /** 1 (very easy) .. 5 (advanced), from AI analysis. */
+  difficulty?: number | null;
+  /** Semantic metadata only. */
+  tags?: string[] | null;
   position: number;
 }
 
@@ -45,6 +49,8 @@ export interface Sentence {
   form: string;
   variation_index: number;
   is_ai_generated: boolean;
+  /** Native-chunk -> target-chunk alignment used by the writing hints. */
+  word_hints?: { native: string; target: string }[] | null;
 }
 
 export interface LearningItem {

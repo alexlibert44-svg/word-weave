@@ -159,6 +159,8 @@ async function storeGenerated(deviceId: string, setId: string, generated: Genera
         pronunciation: g.pronunciation || null,
         part_of_speech: g.part_of_speech || null,
         alternative_parts_of_speech: g.alternative_parts_of_speech ?? [],
+        difficulty: g.difficulty ?? null,
+        tags: g.tags ?? [],
         position: index,
       })),
     )
@@ -174,6 +176,7 @@ async function storeGenerated(deviceId: string, setId: string, generated: Genera
       form: s.form,
       variation_index: s.variation_index,
       is_ai_generated: true,
+      word_hints: s.word_hints ?? [],
     }));
   });
 
