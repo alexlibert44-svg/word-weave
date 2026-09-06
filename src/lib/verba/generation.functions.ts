@@ -69,6 +69,9 @@ Rules:
 - "pronunciation" is a short readable phonetic hint for the target-language word.
 - "part_of_speech" is the word's PRIMARY grammatical class for the learning context, chosen from exactly this list (lowercase English): noun, verb, adjective, adverb, pronoun, preposition, conjunction, determiner, expression, other.
 - "alternative_parts_of_speech" lists other genuine classes of the same word from the same list (e.g. "light" -> ["verb","adjective"]). Use an empty array when the word has only one real class. Never repeat the primary class.
+- "difficulty" is 1..5 for how hard the word is for a learner.
+- "tags" holds 1-3 lowercase English topic tags (metadata only).
+- "word_hints" aligns the NATIVE translation with the TARGET sentence, chunk by chunk, in the order the chunks appear in the translation. Each "native" value MUST be a substring copied verbatim from that sentence's "translation" (a single word, or a short phrase when the languages do not map one-to-one), and "target" is the matching word or phrase copied from "text". Cover every meaningful chunk of the translation; skip nothing important and never invent chunks that are not in the translation.
 Return JSON only, no prose, no markdown fences.`;
 
 export const generateSetContent = createServerFn({ method: "POST" })
