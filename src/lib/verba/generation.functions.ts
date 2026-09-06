@@ -85,7 +85,7 @@ NATIVE language: ${data.nativeLanguage}
 Words (given by the learner, may be written in either language — always treat them as vocabulary to learn in ${data.targetLanguage}): ${data.words.join(", ")}
 
 Return this exact JSON shape:
-{"words":[{"word":"<the word exactly as given>","target_word":"<the word in ${data.targetLanguage}>","translation":"<meaning in ${data.nativeLanguage}>","pronunciation":"","part_of_speech":"","alternative_parts_of_speech":[],"sentences":[{"text":"","translation":"","form":"base","variation_index":0}]}]}`;
+{"words":[{"word":"<the word exactly as given>","target_word":"<the word in ${data.targetLanguage}>","translation":"<meaning in ${data.nativeLanguage}>","pronunciation":"","part_of_speech":"","alternative_parts_of_speech":[],"difficulty":2,"tags":[],"sentences":[{"text":"","translation":"","form":"base","variation_index":0,"word_hints":[{"native":"","target":""}]}]}]}`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
