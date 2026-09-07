@@ -592,7 +592,7 @@ function SpeakStep({
             {t("common.skip")} <ArrowRight className="size-4 rtl:rotate-180" />
           </Button>
         ) : null}
-        {result && (passed || tries >= 2) ? (
+        {result ? (
           <Button
             size="lg"
             className="w-full rounded-2xl"
