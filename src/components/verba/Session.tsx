@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router";
 import {
   ArrowRight,
   Check,
+  Loader2,
   Mic,
   PartyPopper,
   Play,
@@ -17,7 +18,11 @@ import { Input } from "@/components/ui/input";
 import { MasteryBar } from "@/components/verba/MasteryPill";
 import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
-import { logSession, recordAttempt } from "@/lib/verba/api";
+import { logSession, recordAttempt, recordPronunciation } from "@/lib/verba/api";
+import {
+  evaluatePronunciation,
+  type PronunciationResult,
+} from "@/lib/verba/pronunciation.functions";
 import { posLabel } from "@/lib/verba/pos";
 import { speak } from "@/lib/verba/speech";
 import { normalize, similarity } from "@/lib/verba/srs";
@@ -217,6 +222,7 @@ export function Session({
           key={`s-${attempt}-${unit.word.id}`}
           unit={unit}
           locale={locale}
+          deviceId={deviceId}
           onDone={(score, note) => {
             record("speaking", score, note);
             next();
