@@ -216,6 +216,18 @@ export const en = {
   "review.status.mastered": "Mastered",
   "review.startFiltered": "Review {count} items",
   "review.noMatch": "No items match this filter yet.",
+  "common.skip": "Skip",
+  "train.analyzing": "Analysing your speech…",
+  "train.pronScore": "Pronunciation: {score}%",
+  "train.heard": "We heard",
+  "train.heardNothing": "No speech was recognised in that recording.",
+  "train.pronGood": "Good",
+  "train.pronMissed": "Needs practice",
+  "train.pronFailed": "Speech analysis failed. Please try again.",
+  "train.writeSentenceHint": "Write the whole sentence in the language you are learning.",
+  "train.tapForHint": "Tap any word to see it in the language you are learning.",
+  "train.writeMissing": "Missing words",
+  "train.writeExtra": "Extra words",
 } as const;
 
 export type MessageKey = keyof typeof en;
