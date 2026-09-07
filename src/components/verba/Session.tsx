@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router";
 import {
   ArrowRight,
   Check,
+  Loader2,
   Mic,
   PartyPopper,
   Play,
@@ -17,7 +18,11 @@ import { Input } from "@/components/ui/input";
 import { MasteryBar } from "@/components/verba/MasteryPill";
 import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
-import { logSession, recordAttempt } from "@/lib/verba/api";
+import { logSession, recordAttempt, recordPronunciation } from "@/lib/verba/api";
+import {
+  evaluatePronunciation,
+  type PronunciationResult,
+} from "@/lib/verba/pronunciation.functions";
 import { posLabel } from "@/lib/verba/pos";
 import { speak } from "@/lib/verba/speech";
 import { normalize, similarity } from "@/lib/verba/srs";
@@ -217,6 +222,7 @@ export function Session({
           key={`s-${attempt}-${unit.word.id}`}
           unit={unit}
           locale={locale}
+          deviceId={deviceId}
           onDone={(score, note) => {
             record("speaking", score, note);
             next();
@@ -586,7 +592,7 @@ function SpeakStep({
             {t("common.skip")} <ArrowRight className="size-4 rtl:rotate-180" />
           </Button>
         ) : null}
-        {result && (passed || tries >= 2) ? (
+        {result ? (
           <Button
             size="lg"
             className="w-full rounded-2xl"
@@ -613,22 +619,46 @@ function WriteStep({
 }) {
   const { t } = useI18n();
   const { word, sentence } = unit;
-  const { prompt, answer } = sentence
-    ? cloze(sentence.text, word.text)
-    : { prompt: word.translation ?? word.meaning ?? word.text, answer: word.text };
+  // With a sentence the learner writes the whole target sentence from its
+  // translation; a single word is asked from its meaning.
+  const prompt = sentence
+    ? (sentence.translation ?? sentence.text)
+    : (word.translation ?? word.meaning ?? word.text);
+  const answer = sentence?.text ?? word.text;
+  const hints = (sentence?.word_hints ?? []).filter((h) => h?.native && h?.target);
   const [value, setValue] = useState("");
   const [score, setScore] = useState<number | null>(null);
   const [retry, setRetry] = useState(false);
   const [tries, setTries] = useState(0);
+  const [revealed, setRevealed] = useState<Record<number, boolean>>({});
+  const [feedback, setFeedback] = useState<{ missing: string[]; extra: string[] }>({
+    missing: [],
+    extra: [],
+  });
 
   const check = () => {
     const clean = value.trim().replace(/\s+/g, " ");
-    const exact = normalize(clean) === normalize(answer);
-    const result = exact ? 1 : similarity(normalize(clean), normalize(answer));
+    const expected = normalize(answer).split(" ").filter(Boolean);
+    const given = normalize(clean).split(" ").filter(Boolean);
+    const pool = [...given];
+    const missing: string[] = [];
+    for (const token of expected) {
+      const at = pool.indexOf(token);
+      if (at >= 0) pool.splice(at, 1);
+      else missing.push(token);
+    }
+    // Content, order and spelling all count towards the score.
+    const content = expected.length === 0 ? 0 : (expected.length - missing.length) / expected.length;
+    const order = similarity(normalize(clean), normalize(answer));
+    const result =
+      normalize(clean) === normalize(answer)
+        ? 1
+        : Math.round(Math.max(0, content * 0.6 + order * 0.4 - pool.length * 0.05) * 100) / 100;
     const attemptCount = tries + 1;
     setTries(attemptCount);
-    // One honest retry before the answer is revealed; the lower of the two
-    // scores is what gets stored, so a retry never inflates mastery.
+    setFeedback({ missing, extra: pool });
+    // One honest retry before the answer is revealed; a retry never inflates
+    // the stored mastery.
     if (result < 0.9 && attemptCount === 1) {
       setRetry(true);
       return;
@@ -637,19 +667,36 @@ function WriteStep({
     setScore(attemptCount > 1 && result >= 0.9 ? Math.min(result, 0.7) : result);
   };
 
-
   return (
     <div className="flex flex-1 flex-col">
       <h2 className="text-lg font-bold">{t("practice.writingTitle")}</h2>
-      <p className="mt-1 text-sm text-muted-foreground">{t("train.writeHint")}</p>
+      <p className="mt-1 text-sm text-muted-foreground">
+        {sentence ? t("train.writeSentenceHint") : t("train.writeHint")}
+      </p>
 
       <div className="card-surface animate-rise mt-4 p-6">
-        <p className="text-lg leading-relaxed font-semibold" lang={locale}>
-          {prompt}
-        </p>
-        {sentence?.translation ? (
-          <p className="mt-2 text-sm text-muted-foreground">{sentence.translation}</p>
-        ) : null}
+        {hints.length > 0 ? (
+          <>
+            <div className="flex flex-wrap gap-1.5 text-lg leading-relaxed font-semibold">
+              {hints.map((hint, index) => (
+                <button
+                  key={`${hint.native}-${index}`}
+                  type="button"
+                  onClick={() => setRevealed((map) => ({ ...map, [index]: !map[index] }))}
+                  className={cn(
+                    "rounded-xl px-1.5 py-0.5 transition",
+                    revealed[index] ? "bg-primary text-primary-foreground" : "hover:bg-primary-soft",
+                  )}
+                >
+                  {revealed[index] ? hint.target : hint.native}
+                </button>
+              ))}
+            </div>
+            <p className="mt-2 text-xs text-muted-foreground">{t("train.tapForHint")}</p>
+          </>
+        ) : (
+          <p className="text-lg leading-relaxed font-semibold">{prompt}</p>
+        )}
       </div>
 
       <Input
@@ -666,9 +713,19 @@ function WriteStep({
       />
 
       {retry ? (
-        <p className="mt-4 rounded-2xl bg-accent/15 px-4 py-3 text-sm font-semibold" role="status">
-          {t("train.tryAgain")}
-        </p>
+        <div className="mt-4 rounded-2xl bg-accent/15 px-4 py-3 text-sm font-semibold" role="status">
+          <p>{t("train.tryAgain")}</p>
+          {feedback.missing.length > 0 ? (
+            <p className="mt-1 text-xs">
+              {t("train.writeMissing")}: {feedback.missing.length}
+            </p>
+          ) : null}
+          {feedback.extra.length > 0 ? (
+            <p className="mt-1 text-xs">
+              {t("train.writeExtra")}: {feedback.extra.join(" · ")}
+            </p>
+          ) : null}
+        </div>
       ) : null}
 
       {score !== null ? (
@@ -680,9 +737,14 @@ function WriteStep({
           role="status"
         >
           {score >= 0.9 ? t("practice.correct") : t("practice.wrong")}{" "}
-          {score >= 0.9 ? null : <span className="font-bold">{answer}</span>}
+          {score >= 0.9 ? null : (
+            <span className="font-bold" lang={locale}>
+              {answer}
+            </span>
+          )}
         </div>
       ) : null}
+
 
 
       {score === null ? (

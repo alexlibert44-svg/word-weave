@@ -64,8 +64,19 @@ function Chip({
           : "bg-primary-soft text-primary-deep hover:bg-primary-soft/70",
       )}
     >
-      {label}
-      {count === undefined ? null : <span className="ms-1.5 opacity-70">{count}</span>}
+      <span className="inline-flex items-center gap-2">
+        <span>{label}</span>
+        {count === undefined ? null : (
+          <span
+            className={cn(
+              "inline-flex min-w-5 justify-center rounded-full px-1.5 py-0.5 text-[0.7rem] font-bold",
+              active ? "bg-primary-foreground/20" : "bg-primary/10",
+            )}
+          >
+            {count}
+          </span>
+        )}
+      </span>
     </button>
   );
 }
