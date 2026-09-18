@@ -619,18 +619,29 @@ function WriteStep({
 }) {
   const { t } = useI18n();
   const { word, sentence } = unit;
-  // With a sentence the learner writes the whole target sentence from its
-  // translation; a single word is asked from its meaning.
-  const prompt = sentence
-    ? (sentence.translation ?? sentence.text)
-    : (word.translation ?? word.meaning ?? word.text);
-  const answer = sentence?.text ?? word.text;
+
+  // The target-language sentence stays the exercise: the word being learned is
+  // blanked out and the learner writes it back. Without a usable sentence the
+  // word itself is asked from its meaning.
+  const blanked = (() => {
+    if (!sentence?.text) return null;
+    const escaped = word.text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const re = new RegExp(`(^|[^\\p{L}])(${escaped})([^\\p{L}]|$)`, "iu");
+    if (!re.test(sentence.text)) return null;
+    return sentence.text.replace(re, (_m, before: string, _hit: string, after: string) =>
+      `${before}____${after}`,
+    );
+  })();
+
+  const answer = blanked ? word.text : (sentence?.text ?? word.text);
+  const task = blanked ?? sentence?.text ?? null;
+  const support = sentence?.translation ?? word.translation ?? word.meaning ?? "";
   const hints = (sentence?.word_hints ?? []).filter((h) => h?.native && h?.target);
   const [value, setValue] = useState("");
   const [score, setScore] = useState<number | null>(null);
   const [retry, setRetry] = useState(false);
   const [tries, setTries] = useState(0);
-  const [revealed, setRevealed] = useState<Record<number, boolean>>({});
+  const [openHint, setOpenHint] = useState<number | null>(null);
   const [feedback, setFeedback] = useState<{ missing: string[]; extra: string[] }>({
     missing: [],
     extra: [],
@@ -675,28 +686,51 @@ function WriteStep({
       </p>
 
       <div className="card-surface animate-rise mt-4 p-6">
-        {hints.length > 0 ? (
-          <>
-            <div className="flex flex-wrap gap-1.5 text-lg leading-relaxed font-semibold">
-              {hints.map((hint, index) => (
-                <button
-                  key={`${hint.native}-${index}`}
-                  type="button"
-                  onClick={() => setRevealed((map) => ({ ...map, [index]: !map[index] }))}
-                  className={cn(
-                    "rounded-xl px-1.5 py-0.5 transition",
-                    revealed[index] ? "bg-primary text-primary-foreground" : "hover:bg-primary-soft",
-                  )}
-                >
-                  {revealed[index] ? hint.target : hint.native}
-                </button>
-              ))}
-            </div>
-            <p className="mt-2 text-xs text-muted-foreground">{t("train.tapForHint")}</p>
-          </>
-        ) : (
-          <p className="text-lg leading-relaxed font-semibold">{prompt}</p>
-        )}
+        {/* The writing task, always in the target language. */}
+        <p className="text-lg leading-relaxed font-semibold" lang={locale} dir="auto">
+          {task ?? (word.translation ?? word.meaning ?? word.text)}
+        </p>
+
+        {/* Native-language support layer: tappable words, hint shown below. */}
+        {support ? (
+          <div className="mt-4 border-t border-border pt-4">
+            {hints.length > 0 ? (
+              <>
+                <div className="flex flex-wrap gap-1.5 text-base leading-relaxed font-medium" dir="auto">
+                  {hints.map((hint, index) => (
+                    <button
+                      key={`${hint.native}-${index}`}
+                      type="button"
+                      onClick={() => setOpenHint((current) => (current === index ? null : index))}
+                      className={cn(
+                        "rounded-xl px-1.5 py-0.5 transition",
+                        openHint === index
+                          ? "bg-primary text-primary-foreground"
+                          : "hover:bg-primary-soft",
+                      )}
+                    >
+                      {hint.native}
+                    </button>
+                  ))}
+                </div>
+                {openHint !== null && hints[openHint] ? (
+                  <p
+                    className="mt-3 inline-flex rounded-xl bg-primary-soft px-3 py-1.5 text-sm font-bold text-primary"
+                    lang={locale}
+                    role="status"
+                  >
+                    {hints[openHint]!.target}
+                  </p>
+                ) : null}
+                <p className="mt-2 text-xs text-muted-foreground">{t("train.tapForHint")}</p>
+              </>
+            ) : (
+              <p className="text-base leading-relaxed font-medium text-muted-foreground" dir="auto">
+                {support}
+              </p>
+            )}
+          </div>
+        ) : null}
       </div>
 
       <Input
